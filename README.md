@@ -12,7 +12,7 @@ puis affiche le tout en temps réel sur un dashboard qui pilote le buzzer et les
 
 ---
 
-## Architecture
+## Architecture.
 
 ```
  ┌──────────────────────── Boîtier SX-003 ───────────────────────────┐
