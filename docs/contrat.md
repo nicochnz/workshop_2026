@@ -7,6 +7,7 @@
 | Version | Date       | Changement        |
 |---------|------------|-------------------|
 | 1.0     | 2026-10-05 | Version initiale  |
+| 1.1     | 2026-10-05 | Groupe 3 figé, client IDs MQTT, seuils d'alerte ESP, réponses GET, codes d'erreur, rate limits, WebSocket détaillé (§5), variables d'environnement (§8) |
 
 ---
 
@@ -14,8 +15,8 @@
 
 | Élément            | Valeur                                                        |
 |--------------------|---------------------------------------------------------------|
-| Identifiant groupe | `<grp>` = `g` + n° de groupe (ex. `g3`). Variable `GROUP_ID`  |
-| Identifiant boîtier| `SX-` + 3 chiffres (ex. `SX-003`). Regex `^SX-\d{3}$`         |
+| Identifiant groupe | `<grp>` = `g` + n° de groupe → **`g3`**. Variable `GROUP_ID`  |
+| Identifiant boîtier| `SX-` + 3 chiffres → **`SX-003`**. Regex `^SX-\d{3}$`         |
 | Encodage           | JSON UTF-8, clés en `snake_case`, pas de champ inconnu        |
 | Horodatage `ts`    | Timestamp Unix **en secondes** (entier)                       |
 | Heure de référence | **Celle du serveur** (`received_at`, posée par l'API)         |
@@ -51,6 +52,20 @@ Port `1883` (clair, **dev uniquement**) puis `8883` (MQTTS, cible finale).
 | `ai`             | —                                   | `telemetry`                       |
 
 Connexion anonyme interdite (`allow_anonymous false`). Mots de passe dans `.env` / `secrets.h`.
+
+### Client IDs MQTT
+
+Chaque client a un identifiant fixe et unique : le broker déconnecte l'ancien client si un
+second se connecte avec le même ID (utile contre l'usurpation, gênant si deux instances tournent).
+
+| Client       | Client ID     |
+|--------------|---------------|
+| ESP8266      | `sx-003`      |
+| Simulateur   | `sx-003-sim`  |
+| API          | `api-g3`      |
+| Script IA    | `ai-g3`       |
+
+Le simulateur et l'ESP publient sur les mêmes topics : **ne jamais les faire tourner en même temps**.
 
 ---
 
@@ -115,6 +130,18 @@ Qui émet quoi :
 | `AI_VISION`  | `INTRUDER`                  | `POST /api/v1/alerts`    |
 | `AI_PREDICT` | `ANOMALY`                   | `POST /api/v1/alerts`    |
 | `SYSTEM`     | `OFFLINE`                   | Générée par l'API        |
+
+#### Règles de déclenchement côté ESP
+
+| `type`   | Condition                                   | `level`    | Anti-rafale                     |
+|----------|---------------------------------------------|------------|---------------------------------|
+| `GAS`    | `gas` ≥ `GAS_WARN` (défaut **400**)         | `WARNING`  | 1 alerte max / 30 s par niveau  |
+| `GAS`    | `gas` ≥ `GAS_CRIT` (défaut **700**)         | `CRITICAL` | 1 alerte max / 30 s par niveau  |
+| `MOTION` | `pir` passe de 0 à 1                        | `INFO`     | 1 alerte max / 30 s             |
+
+Seuils à **calibrer** sur le vrai MQ-2 (valeur à l'air libre après 2 min de chauffe).
+Ces seuils sont des garde-fous locaux ; la détection fine est le rôle de l'IA (`AI_PREDICT`).
+En `CRITICAL` gaz, l'ESP allume la LED rouge et le buzzer localement, sans attendre le serveur.
 
 ### 3.3 `status` — heartbeat
 
@@ -224,35 +251,83 @@ Réponse `202` (acceptée, exécution confirmée plus tard via `ack`) :
 { "data": { "id": "c-8f3a2b" }, "error": null }
 ```
 
-### 4.4 Codes HTTP
+**`GET /status`** — `200`. `data` = dernier message §3.3 + `received_at`, ou `null` si aucun
+heartbeat reçu depuis le démarrage de l'API.
 
-| Code | Cas                                         |
-|------|---------------------------------------------|
-| 200  | Lecture OK                                  |
-| 201  | Alerte créée                                |
-| 202  | Commande publiée sur MQTT                   |
-| 400  | JSON invalide ou champ hors contrat         |
-| 401  | Jeton absent ou invalide                    |
-| 403  | Jeton valide mais pas le bon rôle           |
-| 413  | Corps trop gros                             |
-| 429  | Trop de requêtes                            |
-| 503  | Broker MQTT injoignable (commande non envoyée) |
+**`GET /telemetry`** — `200`. `data` = tableau des `limit` dernières mesures (§3.1 + `received_at`),
+triées **de la plus ancienne à la plus récente** (prêt pour une courbe).
+
+**`GET /alerts`** — `200`. `data` = tableau d'alertes (§3.2 + `id` + `received_at`), **plus récentes
+d'abord**. `limit` 1 → 200 (défaut 50). `level` optionnel : `INFO`, `WARNING` ou `CRITICAL`.
+
+### 4.4 Codes HTTP et codes d'erreur
+
+| HTTP | `error.code`          | Cas                                            |
+|------|-----------------------|------------------------------------------------|
+| 200  | —                     | Lecture OK                                     |
+| 201  | —                     | Alerte créée                                   |
+| 202  | —                     | Commande publiée sur MQTT                      |
+| 400  | `VALIDATION_ERROR`    | JSON invalide ou champ hors contrat            |
+| 401  | `UNAUTHORIZED`        | Jeton absent ou invalide                       |
+| 403  | `FORBIDDEN`           | Jeton valide mais pas le bon rôle              |
+| 404  | `NOT_FOUND`           | Route inconnue                                 |
+| 413  | `PAYLOAD_TOO_LARGE`   | Corps > 4 Ko                                   |
+| 429  | `RATE_LIMITED`        | Trop de requêtes                               |
+| 500  | `INTERNAL_ERROR`      | Erreur serveur (aucun détail interne exposé)   |
+| 503  | `BROKER_UNAVAILABLE`  | Broker MQTT injoignable (commande non envoyée) |
+
+### 4.5 Rate limiting (par IP)
+
+| Périmètre          | Limite par défaut | Variable                 |
+|--------------------|-------------------|--------------------------|
+| Toutes les routes `/api/v1` | 120 req / min | `RATE_LIMIT_PER_MIN`  |
+| `POST /commands`   | 20 req / min      | `CMD_RATE_LIMIT_PER_MIN` |
 
 ---
 
 ## 5. Temps réel API → dashboard (WebSocket)
 
-Connexion WebSocket sur la même origine, authentifiée avec `OPERATOR_TOKEN`.
-Événements poussés par l'API :
+URL : `ws://192.168.10.1:8080/ws` (puis `wss://` après passage TLS), même origine que le dashboard.
 
-| Événement   | Contenu                                   |
+### 5.1 Authentification
+
+Un navigateur ne peut pas envoyer d'en-tête `Authorization` sur un WebSocket. Le jeton est donc
+envoyé dans le **premier message**, jamais dans l'URL (une URL finit dans les logs) :
+
+```json
+{ "type": "auth", "token": "<OPERATOR_TOKEN>" }
+```
+
+| Cas                                        | Réaction de l'API                  |
+|--------------------------------------------|------------------------------------|
+| Jeton valide                               | Envoie `{ "event": "ready" }`      |
+| Jeton invalide ou premier message invalide | Ferme la connexion, code **4401**  |
+| Aucun message d'auth sous 5 s              | Ferme la connexion, code **4408**  |
+| Tout autre message après l'auth            | Ignoré                             |
+
+L'API refuse aussi toute connexion dont l'en-tête `Origin` ne fait pas partie de `ALLOWED_ORIGINS`.
+
+### 5.2 Événements
+
+Chaque message poussé a la forme `{ "event": "<nom>", "data": { ... } }` :
+
+| `event`     | `data`                                    |
 |-------------|-------------------------------------------|
+| `ready`     | absent — authentification réussie         |
 | `telemetry` | Message §3.1 + `received_at`              |
 | `alert`     | Message §3.2 + `id` + `received_at`       |
 | `status`    | Message §3.3 + `received_at`              |
 | `ack`       | Message §3.5                              |
 
 Le dashboard ne fait **que recevoir** sur le WebSocket ; les commandes passent par `POST /commands`.
+Au chargement, il récupère l'historique par REST (`GET /telemetry`, `/alerts`, `/status`) puis
+suit le flux. En cas de coupure, il se reconnecte avec un délai croissant (1 s → 10 s max).
+
+### 5.3 Jeton côté dashboard
+
+Le dashboard n'embarque **aucun jeton** dans son code. Au premier chargement, l'opérateur saisit
+`OPERATOR_TOKEN` dans un champ ; il est gardé en `sessionStorage` (effacé à la fermeture de l'onglet).
+Une réponse `401` ou une fermeture `4401` efface le jeton et réaffiche la saisie.
 
 ---
 
@@ -284,3 +359,37 @@ Le dashboard l'affiche via `<img src=".../video_feed">`. Résolution 640×480 ma
 | 5000 | Flux MJPEG IA                | oui                           |
 | 22   | SSH par clé                  | oui                           |
 | *    | Base de données              | **non** (réseau Docker interne) |
+
+---
+
+## 8. Variables d'environnement
+
+Valeurs factices dans `.env.example` ; les vraies valeurs dans `.env` (jamais commité).
+
+### API
+
+| Variable                 | Exemple                         | Rôle                                     |
+|--------------------------|---------------------------------|------------------------------------------|
+| `PORT`                   | `8080`                          | Port HTTP de l'API + dashboard           |
+| `GROUP_ID`               | `g3`                            | Construit les topics `sentinel/g3/...`   |
+| `MQTT_URL`               | `mqtt://mosquitto:1883`         | Broker (`mqtts://...:8883` après TLS)    |
+| `MQTT_USERNAME`          | `api`                           | Compte MQTT de l'API                     |
+| `MQTT_PASSWORD`          | `change-me`                     |                                          |
+| `MQTT_CA_FILE`           | `/certs/ca.crt`                 | CA pour MQTTS (vide en clair)            |
+| `DATABASE_URL`           | `postgres://sentinel:change-me@db:5432/sentinel` | Connexion PostgreSQL    |
+| `INGEST_TOKEN`           | 32+ caractères aléatoires       | Jeton du script IA                       |
+| `OPERATOR_TOKEN`         | 32+ caractères aléatoires       | Jeton du dashboard                       |
+| `ALLOWED_ORIGINS`        | `http://192.168.10.1:8080`      | Origines autorisées (WebSocket), séparées par `,` |
+| `OFFLINE_TIMEOUT_S`      | `10`                            | Passage `offline` sans message reçu      |
+| `RATE_LIMIT_PER_MIN`     | `120`                           | Cf. §4.5                                 |
+| `CMD_RATE_LIMIT_PER_MIN` | `20`                            | Cf. §4.5                                 |
+
+Générer un jeton : `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+
+### Script IA (pour mémoire, géré par IA)
+
+`MQTT_URL`, `MQTT_USERNAME=ai`, `MQTT_PASSWORD`, `API_URL=http://192.168.10.1:8080/api/v1`, `INGEST_TOKEN`.
+
+### Firmware (`secrets.h`)
+
+`WIFI_SSID`, `WIFI_PASSWORD`, `MQTT_HOST=192.168.10.1`, `MQTT_PORT`, `MQTT_USERNAME=esp`, `MQTT_PASSWORD`, `CA_CERT`.
