@@ -8,6 +8,7 @@
 |---------|------------|-------------------|
 | 1.0     | 2026-10-05 | Version initiale  |
 | 1.1     | 2026-10-05 | Groupe 3 figé, client IDs MQTT, seuils d'alerte ESP, réponses GET, codes d'erreur, rate limits, WebSocket détaillé (§5), variables d'environnement (§8) |
+| 1.2     | 2026-10-05 | PIR remplacé par capteur ultrason : `pir` → `dist` + `presence` (§3.1), règle `MOTION` revue (§3.2) |
 
 ---
 
@@ -22,7 +23,7 @@
 | Heure de référence | **Celle du serveur** (`received_at`, posée par l'API)         |
 | Taille max message | MQTT : 512 octets · HTTP : 4 Ko                               |
 
-**Pourquoi l'heure serveur fait foi :** en option B le réseau de table n'a pas forcément Internet,
+**Pourquoi l'heure serveur fait foi :** le réseau de table n'a pas forcément Internet,
 l'ESP8266 peut donc ne pas avoir l'heure (NTP). Il envoie `ts = 0` tant qu'il n'est pas
 synchronisé ; l'API horodate toujours elle-même chaque message à la réception.
 
@@ -30,7 +31,7 @@ synchronisé ; l'API horodate toujours elle-même chaque message à la réceptio
 
 ## 2. Topics MQTT
 
-Broker : Mosquitto sur le PC Serveur Local (`192.168.10.1`).
+Broker : Mosquitto sur le PC Serveur Local, le laptop serveur (`192.168.10.1`).
 Port `1883` (clair, **dev uniquement**) puis `8883` (MQTTS, cible finale).
 
 | Topic                     | Publié par            | Écouté par      | QoS | Retain | Fréquence            |
@@ -81,7 +82,8 @@ Le simulateur et l'ESP publient sur les mêmes topics : **ne jamais les faire to
   "temp": 22.4,
   "hum": 45.1,
   "gas": 312,
-  "pir": 0
+  "dist": 142,
+  "presence": 0
 }
 ```
 
@@ -93,7 +95,8 @@ Le simulateur et l'ESP publient sur les mêmes topics : **ne jamais les faire to
 | `temp`  | number \| null  | °C, -40 → 80           | DHT22. `null` si lecture en échec                 |
 | `hum`   | number \| null  | %, 0 → 100             | DHT22. `null` si lecture en échec                 |
 | `gas`   | int             | 0 → 1023               | Valeur brute ADC du MQ-2 (A0)                     |
-| `pir`   | int             | 0 ou 1                 | 1 = mouvement détecté sur la période              |
+| `dist`  | int \| null     | cm, 2 → 400            | Capteur ultrason. `null` si pas d'écho (hors portée) |
+| `presence` | int          | 0 ou 1                 | 1 = `dist` < `PRESENCE_CM` (défaut **80**) sur la période |
 
 `seq` permet de détecter des messages perdus et sert de feature à l'IA.
 
@@ -137,9 +140,10 @@ Qui émet quoi :
 |----------|---------------------------------------------|------------|---------------------------------|
 | `GAS`    | `gas` ≥ `GAS_WARN` (défaut **400**)         | `WARNING`  | 1 alerte max / 30 s par niveau  |
 | `GAS`    | `gas` ≥ `GAS_CRIT` (défaut **700**)         | `CRITICAL` | 1 alerte max / 30 s par niveau  |
-| `MOTION` | `pir` passe de 0 à 1                        | `INFO`     | 1 alerte max / 30 s             |
+| `MOTION` | `presence` passe de 0 à 1                   | `INFO`     | 1 alerte max / 30 s             |
 
-Seuils à **calibrer** sur le vrai MQ-2 (valeur à l'air libre après 2 min de chauffe).
+Seuils à **calibrer** : `PRESENCE_CM` selon la position du boîtier (distance au mur ou à la porte
+surveillée), gaz sur le vrai MQ-2 (valeur à l'air libre après 2 min de chauffe).
 Ces seuils sont des garde-fous locaux ; la détection fine est le rôle de l'IA (`AI_PREDICT`).
 En `CRITICAL` gaz, l'ESP allume la LED rouge et le buzzer localement, sans attendre le serveur.
 
@@ -347,7 +351,7 @@ Le dashboard l'affiche via `<img src=".../video_feed">`. Résolution 640×480 ma
 
 | Appareil                | IP                    | Rôle                                  |
 |-------------------------|-----------------------|---------------------------------------|
-| Laptop PC Serveur Local | `192.168.10.1`        | Point d'accès Wi-Fi, Docker, IA       |
+| Laptop PC Serveur Local | `192.168.10.1`        | Point d'accès Wi-Fi, Docker, IA, webcam USB |
 | Boîtier ESP8266         | `192.168.10.20`       | Capteurs, OLED, buzzer, LEDs          |
 | Postes de l'équipe      | `192.168.10.50 → .60` | Accès dashboard                       |
 
@@ -359,6 +363,9 @@ Le dashboard l'affiche via `<img src=".../video_feed">`. Résolution 640×480 ma
 | 5000 | Flux MJPEG IA                | oui                           |
 | 22   | SSH par clé                  | oui                           |
 | *    | Base de données              | **non** (réseau Docker interne) |
+
+**Plan de secours :** la stack Docker tourne telle quelle sur n'importe quel laptop de l'équipe,
+qui reprend l'IP `192.168.10.1`. Rien ne change pour l'ESP, l'IA ou le dashboard.
 
 ---
 
