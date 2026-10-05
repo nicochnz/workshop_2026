@@ -1,0 +1,22 @@
+# ACL conformes au contrat §2 (groupe g3)
+
+user esp
+topic write sentinel/g3/telemetry
+topic write sentinel/g3/alerts
+topic write sentinel/g3/status
+topic write sentinel/g3/ack
+topic read sentinel/g3/cmd
+
+user api
+topic write sentinel/g3/cmd
+topic read sentinel/g3/telemetry
+topic read sentinel/g3/alerts
+topic read sentinel/g3/status
+topic read sentinel/g3/ack
+
+user ai
+topic read sentinel/g3/telemetry
+
+# DEV uniquement : lecture de tout le trafic pour déboguer
+user monitor
+topic read sentinel/g3/#
