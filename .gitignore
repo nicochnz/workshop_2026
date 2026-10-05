@@ -17,6 +17,10 @@ certs/
 # Node
 node_modules/
 dist/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
 npm-debug.log*
 
 # Python
@@ -40,3 +44,11 @@ data/
 .DS_Store
 Thumbs.db
 .idea/
+
+# Claude Code — config locale, jamais poussée
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+
+# Sujet du workshop (document EPSI, non publié)
+docs/Workshop-2026_*Sujet*.pdf
