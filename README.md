@@ -1,7 +1,8 @@
 # Sentinel-X — Groupe 3 (Workshop EPSI M1 2026)
 
 Boîtier de surveillance autonome (Edge Node) relié à un PC Serveur Local.
-Un ESP8266 mesure température, humidité, gaz et présence, et envoie ses mesures en MQTT au serveur.
+Un ESP8266 mesure température, humidité, gaz et présence (ultrason), et envoie ses mesures en MQTT
+au serveur.
 Celui-ci stocke tout, détecte les intrus par webcam (YOLO) et les anomalies (maintenance prédictive),
 puis affiche le tout en temps réel sur un dashboard qui pilote le buzzer et les LEDs du boîtier.
 
@@ -14,11 +15,11 @@ puis affiche le tout en temps réel sur un dashboard qui pilote le buzzer et les
 ## Architecture
 
 ```
- ┌──────────────── Boîtier SX-003 ────────────────┐
- │ ESP8266 : DHT22 · MQ-2 · PIR · OLED · buzzer · LEDs │
- └──────────────────────┬─────────────────────────┘
+ ┌──────────────────────── Boîtier SX-003 ───────────────────────────┐
+ │ ESP8266 : DHT11 · MQ (gaz) · ultrason · OLED · buzzer · LEDs      │
+ └──────────────────────┬────────────────────────────────────────────┘
                         │ Wi-Fi 192.168.10.0/24 — MQTT(S)
- ┌──────────────── PC Serveur Local 192.168.10.1 ─────────────────┐
+ ┌────────────── Laptop serveur (PC Serveur Local) 192.168.10.1 ───┐
  │  Docker Compose                                                 │
  │   ├─ Mosquitto (broker MQTT)        :1883 / :8883               │
  │   ├─ API Node.js + dashboard        :8080  ──► PostgreSQL       │
@@ -94,12 +95,13 @@ _Détails TLS et hardening : à compléter (étape 5)._
 
 - [Contrat d'interface](docs/contrat.md) — topics MQTT, formats JSON, API REST, WebSocket
 - [Câblage](docs/cablage.md) — brochage du boîtier
+- [Composants](docs/composants.md) — matériel disponible
 
 ## Équipe
 
-| Filière    | Membre | Responsabilité                                      |
-|------------|--------|-----------------------------------------------------|
-| EISI DEV   | Nicolas Chiche | Firmware, API, dashboard, contrôle réactif  |
-| EISI IA    | _à compléter_  | Vision YOLO, maintenance prédictive         |
-| EISI INFRA | _à compléter_  | Docker Compose, réseau, monitoring          |
-| CYBER      | _à compléter_  | TLS, hardening, pentest                     |
+| Membre   | Filière       | Responsabilité                              |
+|----------|---------------|---------------------------------------------|
+| Nicolas  | EISI DEV      | Firmware, API, dashboard, contrôle réactif  |
+| Baptiste | _à compléter_ |                                             |
+| Raphael  | _à compléter_ |                                             |
+| Baptiste | _à compléter_ |                                             |
