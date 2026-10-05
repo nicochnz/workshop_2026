@@ -68,7 +68,17 @@ Toutes les interfaces (topics, JSON, routes, codes HTTP) sont définies dans **[
 
 ## Installation et lancement
 
-_À compléter (étapes 1 à 4)._
+### Développement sans matériel (simulateur)
+
+```bash
+cp dev/.env.example dev/.env
+docker compose -f dev/docker-compose.yml up -d     # broker Mosquitto de dev (port 1883)
+cd simulator && cp .env.example .env && npm install && npm start
+```
+
+Détails, scénarios et commandes de test : [simulator/README.md](simulator/README.md).
+
+_API, dashboard et firmware : à compléter (étapes 2 à 4)._
 
 ## Réseau (option B)
 

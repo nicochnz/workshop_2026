@@ -1,0 +1,15 @@
+# Broker MQTT de DÉVELOPPEMENT uniquement (port 1883 en clair).
+# La version officielle (TLS, durcissement) est gérée par INFRA / CYBER.
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: sx-mosquitto-dev
+    entrypoint: ["sh", "/dev-entrypoint.sh"]
+    env_file: .env
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/acl:/dev-acl:ro
+      - ./mosquitto/entrypoint.sh:/dev-entrypoint.sh:ro
+    restart: unless-stopped
