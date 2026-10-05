@@ -72,13 +72,22 @@ Toutes les interfaces (topics, JSON, routes, codes HTTP) sont définies dans **[
 
 ```bash
 cp dev/.env.example dev/.env
-docker compose -f dev/docker-compose.yml up -d     # broker Mosquitto de dev (port 1883)
+docker compose -f dev/docker-compose.yml up -d     # Mosquitto (1883) + PostgreSQL (55432)
 cd simulator && cp .env.example .env && npm install && npm start
 ```
 
 Détails, scénarios et commandes de test : [simulator/README.md](simulator/README.md).
 
-_API, dashboard et firmware : à compléter (étapes 2 à 4)._
+### API
+
+```bash
+cd api && cp .env.example .env     # puis générer INGEST_TOKEN et OPERATOR_TOKEN
+npm install && npm run dev         # http://localhost:8080
+```
+
+Routes, WebSocket, variables d'environnement et procédure de test : [api/README.md](api/README.md).
+
+_Dashboard et firmware : à compléter (étapes 3 et 4)._
 
 ## Réseau (option B)
 
@@ -104,6 +113,7 @@ _Détails TLS et hardening : à compléter (étape 5)._
 ## Documentation
 
 - [Contrat d'interface](docs/contrat.md) — topics MQTT, formats JSON, API REST, WebSocket
+- [API](api/README.md) — routes, WebSocket, variables d'environnement, Docker
 - [Câblage](docs/cablage.md) — brochage du boîtier
 - [Composants](docs/composants.md) — matériel disponible
 
