@@ -170,14 +170,29 @@ réseau de table (contrat §7).
 
 ## Docker
 
+L'image embarque l'API **et** le dashboard (construit dans l'image, étape `dashboard` du
+Dockerfile) : le contexte de build est donc la **racine du dépôt**.
+
 ```bash
-docker build -t sentinel-api ./api
+docker build -f api/Dockerfile -t sentinel-api .
 ```
 
-Image multi-stage, exécutée en utilisateur `node` (non-root), healthcheck sur `/health`.
-Quand le dashboard existera (étape 3), décommenter la ligne `COPY dashboard/out ./public`
-du `Dockerfile` et construire depuis la racine du dépôt : l'API servira le dashboard sur `/`,
-même origine que le REST et le WebSocket.
+Image multi-stage (~225 Mo), exécutée en utilisateur `node` (non-root), healthcheck sur `/health`.
+Le dashboard est servi sur `/`, même origine que le REST et le WebSocket : pas de CORS en
+production. Fichiers exclus du contexte : `api/Dockerfile.dockerignore`.
+
+Stack complète comme en production (broker + base + API/dashboard), depuis la racine :
+
+```bash
+docker compose -f dev/docker-compose.yml --profile full up -d --build
+```
+
+Dans `docker-compose.yml` (INFRA) :
+
+```yaml
+api:
+  build: { context: ., dockerfile: api/Dockerfile }
+```
 
 ## Architecture du code
 
