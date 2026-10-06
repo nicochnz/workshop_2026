@@ -93,7 +93,7 @@ services:
       - ./proxy/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ../certs/proxy:/etc/nginx/certs:ro  # proxy.crt + proxy.key uniquement
     extra_hosts:
-      - "host.docker.internal:host-gateway"  # nécessaire sous Linux (Raspberry Pi)
+      - "host.docker.internal:host-gateway"  # natif sous Docker Desktop, requis sous Docker Engine Linux
     networks:
       edge:
         ipv4_address: 172.30.10.10

@@ -15,7 +15,7 @@
 #   certs/proxy/                       proxy.crt + proxy.key                   → conteneur nginx (HTTPS) uniquement
 #   certs/public/ca.crt                CA publique → API, simulateur, IA, firmware ESP8266, navigateurs
 #
-# Aucune clé privée n'est affichée. Prérequis : openssl (Git Bash sous Windows, natif sur le Raspberry Pi).
+# Aucune clé privée n'est affichée. Prérequis : openssl (fourni par Git Bash sous Windows, natif sous Linux).
 set -euo pipefail
 
 # Git Bash convertirait le sujet "/O=..." en chemin Windows (sans effet ailleurs).

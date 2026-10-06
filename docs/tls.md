@@ -23,8 +23,8 @@ Navigateur ──HTTPS/WSS 443──► nginx ─┬─ /, /api/v1, /ws ──�
 
 ## 1. Générer les certificats
 
-Sur le serveur (Raspberry Pi) ou sur le poste de dev, depuis la racine du dépôt
-(Git Bash sous Windows) :
+Sur le laptop serveur (192.168.10.1), depuis la racine du dépôt (Git Bash sous Windows,
+n'importe quel shell sous Linux) :
 
 ```bash
 ./scripts/generate-certs.sh
@@ -158,23 +158,25 @@ BearSSL vérifie la période de validité du certificat. Au démarrage, l'ESP cr
 MQTTS échoue.** Le réseau Sentinel-X n'a pas forcément Internet, donc `pool.ntp.org` peut être
 injoignable. Deux solutions :
 
-**Option A (recommandée) — serveur NTP local sur le Raspberry Pi.** Le firmware interroge déjà
+**Option A (recommandée) — serveur NTP local sur le laptop serveur.** Le firmware interroge déjà
 `192.168.10.1` en second serveur NTP (`configTime(0, 0, "pool.ntp.org", MQTT_HOST)` dans
-`network.cpp`) : il n'y a rien à changer côté ESP pour l'heure elle-même. Sur le Pi, en dehors
-de Docker, **pendant qu'il a encore Internet** :
+`network.cpp`) : il n'y a rien à changer côté ESP pour l'heure elle-même. Il suffit que le
+laptop réponde en NTP (UDP 123) avec sa propre horloge, même sans Internet.
 
-```bash
-sudo apt install chrony
-printf 'allow 192.168.10.0/24\nlocal stratum 10\n' | sudo tee /etc/chrony/conf.d/sentinel-x.conf
-sudo systemctl restart chrony
-chronyc tracking            # le Pi est-il lui-même à l'heure ?
-# pare-feu éventuel : sudo ufw allow from 192.168.10.0/24 to any port 123 proto udp
-```
+> **État : non intégré, à valider.** La piste privilégiée a été prototypée et testée hors dépôt.
 
-`local stratum 10` permet au Pi de servir son heure même sans Internet. Sans pile RTC, le Pi 5
-redémarre à l'heure de son dernier arrêt : vérifier `date` avant la démo, et la régler au besoin
-(`sudo date -s "2026-10-09 09:00"`). Le Pi ne doit pas non plus être **avant** la date de
-génération des certificats.
+| Solution | OS du laptop | État |
+|---|---|---|
+| Conteneur chrony (`alpine` + `chrony`, `local stratum 10`, `chronyd -x` : sert l'horloge sans la modifier, aucun privilège) publié sur `123/udp` | indépendant (Docker) | **prototype testé** sous Windows 11 / Docker Desktop : réponse mode serveur, stratum 10, LI 0, heure du laptop |
+| Service de temps Windows (`w32time`) en mode serveur NTP (registre `NtpServer Enabled=1`, `AnnounceFlags=5`, droits admin) | Windows | non testé : il faut vérifier qu'il répond avec un stratum non nul hors ligne, sinon l'ESP rejette la réponse |
+| chrony installé sur l'hôte (`allow 192.168.10.0/24`, `local stratum 10`) | Linux | non testé |
+
+Dans tous les cas :
+- ouvrir **UDP 123 entrant** au pare-feu du laptop ;
+- le laptop doit lui-même être à l'heure : le régler avant de couper Internet, ne pas le mettre en
+  veille pendant la démo (sous Docker Desktop, l'horloge de la VM WSL2 peut dériver après une
+  veille) ;
+- le laptop ne doit pas être **avant** la date de génération des certificats.
 
 **Option B — heure de référence dans le firmware.** Si le NTP local n'est pas en place, on
 fournit à BearSSL une date minimale, celle de la compilation (`platformio.ini` :
@@ -202,7 +204,8 @@ docker compose -f dev/docker-compose.yml --profile full --profile https up -d --
   (Mixed Content bloqué). nginx relaie `/video_feed` vers le script IA sur l'hôte
   (`AI_VIDEO_UPSTREAM`, défaut `http://host.docker.internal:5000`), sans mise en tampon. En HTTPS,
   le dashboard utilise donc `https://<hôte>/video_feed` (même origine). En HTTP, il garde l'accès
-  direct au port 5000. Le script IA n'a rien à changer.
+  direct au port 5000. Le script IA n'a rien à changer. Si l'IA passe dans Docker Compose,
+  il suffit de poser `AI_VIDEO_UPSTREAM=http://<service-ia>:5000` dans `dev/.env`.
 - L'API reste joignable en HTTP sur **:8080** pendant la migration (fallback).
 - Pas de HSTS : il s'appliquerait aussi à `http://localhost:8080` et casserait le fallback.
 
@@ -238,8 +241,11 @@ commande.
 | 2 | Validation : ESP, IA et dashboard en TLS | Tests ci-dessus, ESP sur 8883 |
 | 3 | TLS seul | `MQTT_PLAIN_LISTENER=off` dans `dev/.env`, retirer `"1883:1883"` (et `"8080:8080"`) des `ports` du Compose, fermer 1883/8080/5000 au pare-feu (le proxy joint l'API par le réseau Docker et l'IA par l'hôte) |
 
-Pare-feu Windows (poste de dev, PowerShell **administrateur**) :
-`New-NetFirewallRule -DisplayName "Sentinel-X TLS" -Direction Inbound -Protocol TCP -LocalPort 8883,443 -Action Allow`.
+Pare-feu du laptop serveur (ports entrants 8883 et 443 en TCP, plus 123 en UDP si le NTP local
+est en place) :
+- Windows (PowerShell **administrateur**) :
+  `New-NetFirewallRule -DisplayName "Sentinel-X TLS" -Direction Inbound -Protocol TCP -LocalPort 8883,443 -Action Allow`
+- Linux : selon le pare-feu en place (ufw, firewalld, nftables).
 
 ## 8. Équipe IA (pour mémoire)
 
