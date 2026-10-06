@@ -109,7 +109,7 @@ static void every(uint32_t& last, uint32_t interval, void (*action)()) {
 
 void setup() {
   Serial.begin(115200);
-  Serial.printf("\n\n=== Sentinel-X %s - firmware %s ===\n", DEVICE_ID, FW_VERSION);
+  Serial.printf("\n\n=== Sentinel-X %s - firmware %s (%s) ===\n", DEVICE_ID, FW_VERSION, USE_TLS ? "MQTTS" : "MQTT clair");
 
   actuatorsBegin();
   sensorsBegin();

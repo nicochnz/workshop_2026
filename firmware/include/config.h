@@ -9,6 +9,20 @@
 #error "Copier include/secrets.example.h en include/secrets.h et le remplir"
 #endif
 
+// Ancien secrets.h sans réglage TLS : on reste en clair
+#ifndef USE_TLS
+#define USE_TLS 0
+#endif
+
+#if USE_TLS && MQTT_PORT == 1883
+#warning "USE_TLS=1 mais MQTT_PORT=1883 : le broker attend le TLS sur 8883"
+#endif
+
+// Injecté par platformio.ini (date de compilation), 0 si absent
+#ifndef BUILD_UNIX_TIME
+#define BUILD_UNIX_TIME 0
+#endif
+
 // --- Identité ---
 #define DEVICE_ID "SX-003"
 #define GROUP_TOPIC "sentinel/g3"
@@ -42,7 +56,8 @@ constexpr uint32_t DIST_SAMPLE_MS = 250;
 constexpr uint32_t DISPLAY_INTERVAL_MS = 1000;
 constexpr uint32_t MQTT_RETRY_MS = 5000;
 constexpr int MQTT_KEEPALIVE_S = 5;    // LWT déclenché ~7,5 s après une coupure
-constexpr int MQTT_TIMEOUT_MS = 2000;  // borne les appels réseau bloquants
+// Borne les appels réseau bloquants. Le handshake TLS prend ~1 s à 160 MHz.
+constexpr int MQTT_TIMEOUT_MS = USE_TLS ? 5000 : 2000;
 
 // --- Ultrason ---
 constexpr uint32_t ECHO_TIMEOUT_US = 25000;  // ~4 m aller-retour

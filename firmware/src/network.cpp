@@ -6,7 +6,15 @@
 
 #include "config.h"
 
+#if USE_TLS
+#include <WiFiClientSecureBearSSL.h>
+// MQTTS : le certificat du broker est vérifié avec notre CA (chaîne + nom MQTT_HOST).
+// Jamais setInsecure() : il accepterait n'importe quel serveur (attaque de l'homme du milieu).
+static BearSSL::WiFiClientSecure net;
+static BearSSL::X509List trustAnchor(CA_CERT);
+#else
 static WiFiClient net;
+#endif
 static MQTTClient mqtt(MQTT_BUFFER_SIZE);
 
 static MessageHandler messageHandler = nullptr;
@@ -36,7 +44,13 @@ void networkBegin(MessageHandler onMessage, ConnectHandler onConnect) {
   Serial.printf("[WIFI] Connexion a %s...\n", WIFI_SSID);
 
   net.setTimeout(MQTT_TIMEOUT_MS);
-  mqtt.begin(MQTT_HOST, MQTT_PORT, net);
+#if USE_TLS
+  net.setTrustAnchors(&trustAnchor);
+  // Réception : 16 Ko imposés (Mosquitto ne négocie pas de fragments plus petits).
+  // Émission : 512 o suffisent, nos messages sont plus petits. Économise ~15 Ko de RAM.
+  net.setBufferSizes(16384, 512);
+#endif
+  mqtt.begin(MQTT_HOST, MQTT_PORT, net);  // nom en chaîne : BearSSL le compare au certificat
   mqtt.setOptions(MQTT_KEEPALIVE_S, true, MQTT_TIMEOUT_MS);
   mqtt.setWill(TOPIC_STATUS, OFFLINE_PAYLOAD, true, 1);
   mqtt.onMessageAdvanced(onMqttMessage);
@@ -51,15 +65,37 @@ static void onWifiChange(bool up) {
   }
 }
 
+#if USE_TLS
+// Le TLS vérifie la période de validité du certificat : il faut l'heure. Sans NTP
+// (réseau de table sans Internet), la date de compilation sert d'heure minimale.
+static void setTlsClock() {
+  const uint32_t ntp = unixTime();
+  net.setX509Time(ntp != 0 ? ntp : BUILD_UNIX_TIME);
+  Serial.printf("[TLS] Heure de verification : %s\n", ntp != 0 ? "NTP" : "date de compilation");
+}
+
+static void logTlsError() {
+  char text[96];
+  const int code = net.getLastSSLError(text, sizeof(text));
+  if (code != 0) Serial.printf("[TLS] Erreur %d : %s\n", code, text);
+}
+#endif
+
 static void tryMqttConnect() {
   if (mqttAttempted && millis() - lastMqttAttempt < MQTT_RETRY_MS) return;
   mqttAttempted = true;
   lastMqttAttempt = millis();
 
-  Serial.printf("[MQTT] Connexion a %s:%d...\n", MQTT_HOST, MQTT_PORT);
+  Serial.printf("[MQTT] Connexion a %s:%d (%s)...\n", MQTT_HOST, MQTT_PORT, USE_TLS ? "MQTTS" : "clair");
+#if USE_TLS
+  setTlsClock();
+#endif
   if (!mqtt.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD)) {
     Serial.printf("[MQTT] Echec (erreur %d, code retour %d), nouvel essai dans %u s\n",
                   mqtt.lastError(), mqtt.returnCode(), MQTT_RETRY_MS / 1000);
+#if USE_TLS
+    logTlsError();
+#endif
     return;
   }
 
