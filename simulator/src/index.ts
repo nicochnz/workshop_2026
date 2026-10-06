@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import mqtt from "mqtt";
 import { Actuators } from "./actuators.js";
 import { AlertEngine } from "./alerts.js";
@@ -26,8 +27,19 @@ let seq = 0;
 
 const offlineStatus: Status = { device: config.DEVICE_ID, state: "offline" };
 
+// MQTTS : certificat du broker vérifié avec la CA locale, comme le fera l'ESP8266.
+function tlsOptions(): mqtt.IClientOptions {
+  if (!config.MQTT_URL.startsWith("mqtts://")) return {};
+  if (!config.MQTT_CA_FILE) {
+    console.error("❌ MQTT_URL est en mqtts:// mais MQTT_CA_FILE est vide (voir docs/tls.md)");
+    process.exit(1);
+  }
+  return { ca: [readFileSync(config.MQTT_CA_FILE)], rejectUnauthorized: true };
+}
+
 // LWT : publié par le broker si on disparaît sans se déconnecter proprement
 const client = mqtt.connect(config.MQTT_URL, {
+  ...tlsOptions(),
   clientId: config.MQTT_CLIENT_ID,
   username: config.MQTT_USERNAME,
   password: config.MQTT_PASSWORD,

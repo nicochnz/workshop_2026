@@ -102,9 +102,28 @@ export class MqttBridge implements MqttBroker {
     await new Promise<void>((resolve) => client.end(false, {}, () => resolve()));
   }
 
-  // MQTTS (étape 5) : le CA est fourni par l'infrastructure, jamais commité.
   private tlsOptions(): mqtt.IClientOptions {
-    if (!this.options.caFile) return {};
-    return { ca: [readFileSync(this.options.caFile)], rejectUnauthorized: true };
+    return mqttTlsOptions(this.options.url, this.options.caFile, readFileSync);
+  }
+}
+
+/**
+ * MQTTS (docs/tls.md) : le certificat du broker est vérifié avec la CA locale, jamais
+ * accepté aveuglément. En `mqtt://` (fallback de démo) la CA est ignorée, ce qui permet
+ * de basculer en ne changeant que MQTT_URL.
+ */
+export function mqttTlsOptions(
+  url: string,
+  caFile: string,
+  readFile: (path: string) => Buffer,
+): mqtt.IClientOptions {
+  if (!url.startsWith("mqtts://")) return {};
+  if (!caFile) {
+    throw new Error("MQTT_URL est en mqtts:// mais MQTT_CA_FILE est vide (voir docs/tls.md)");
+  }
+  try {
+    return { ca: [readFile(caFile)], rejectUnauthorized: true };
+  } catch {
+    throw new Error(`CA MQTT illisible : ${caFile} (lancer scripts/generate-certs.sh)`);
   }
 }

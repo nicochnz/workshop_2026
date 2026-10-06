@@ -10,6 +10,7 @@ et répond aux commandes (`cmd` → `ack`), exactement comme le boîtier (cf. [c
 ```bash
 # 1. Broker de dev (une seule fois, depuis la racine du dépôt)
 cp dev/.env.example dev/.env
+./scripts/generate-certs.sh          # CA locale pour MQTTS (docs/tls.md)
 docker compose -f dev/docker-compose.yml up -d
 
 # 2. Simulateur
@@ -18,6 +19,10 @@ cp .env.example .env
 npm install
 npm start
 ```
+
+Par défaut, le simulateur se connecte en **MQTTS** (`mqtts://localhost:8883`) et vérifie le
+certificat du broker avec `MQTT_CA_FILE=../certs/public/ca.crt`, comme le fera l'ESP8266.
+Fallback en clair : `MQTT_URL=mqtt://localhost:1883` dans `.env`.
 
 ## Scénarios (touches pendant l'exécution)
 

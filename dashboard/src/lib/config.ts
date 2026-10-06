@@ -13,6 +13,10 @@ export function wsUrl(): string {
   return `${base.replace(/^http/, "ws")}/ws`;
 }
 
+// En HTTPS, le flux passe par le reverse proxy (même origine) : un flux http://…:5000
+// serait bloqué comme Mixed Content. En HTTP (fallback), accès direct au script IA.
 export function videoUrl(): string {
-  return VIDEO_URL || `${window.location.protocol}//${window.location.hostname}:5000/video_feed`;
+  if (VIDEO_URL) return VIDEO_URL;
+  if (window.location.protocol === "https:") return `${window.location.origin}/video_feed`;
+  return `http://${window.location.hostname}:5000/video_feed`;
 }

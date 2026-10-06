@@ -6,6 +6,8 @@ const envSchema = z.object({
   MQTT_USERNAME: z.string().min(1).default("esp"),
   MQTT_PASSWORD: z.string().min(1),
   MQTT_CLIENT_ID: z.string().min(1).default("sx-003-sim"),
+  // CA locale pour mqtts:// (docs/tls.md), ignorée en mqtt://
+  MQTT_CA_FILE: z.string().default(""),
   GROUP_ID: z.string().regex(/^g\d+$/).default("g3"),
   DEVICE_ID: z.string().regex(/^SX-\d{3}$/).default("SX-003"),
   TELEMETRY_INTERVAL_MS: z.coerce.number().int().min(500).default(2000),

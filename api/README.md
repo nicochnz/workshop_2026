@@ -95,7 +95,7 @@ L'API ne fait **aucune** inférence : elle valide, stocke et diffuse les résult
 
 ## WebSocket (contrat §5)
 
-`ws://<hôte>:8080/ws`. L'origine doit figurer dans `ALLOWED_ORIGINS`, sans quoi la connexion
+`ws://<hôte>:8080/ws`, ou `wss://<hôte>/ws` derrière le proxy HTTPS. L'origine doit figurer dans `ALLOWED_ORIGINS`, sans quoi la connexion
 est refusée (`403` à la négociation). Premier message obligatoire, dans les 5 s :
 
 ```json
@@ -142,10 +142,10 @@ Modèle complet dans [`.env.example`](.env.example).
 | `NODE_ENV` | `production` | `development` active le CORS pour `ALLOWED_ORIGINS` |
 | `PORT` | `8080` | Port HTTP (API + dashboard) |
 | `GROUP_ID` | `g3` | Construit les topics `sentinel/g3/...` |
-| `MQTT_URL` | `mqtt://localhost:1883` | Broker (`mqtts://...:8883` après TLS) |
+| `MQTT_URL` | `mqtt://localhost:1883` | Broker. Cible : `mqtts://mosquitto:8883` ; fallback démo : `mqtt://mosquitto:1883` |
 | `MQTT_USERNAME` / `MQTT_PASSWORD` | `api` / — | Compte MQTT de l'API |
 | `MQTT_CLIENT_ID` | `api-g3` | Client ID fixe (contrat §2) |
-| `MQTT_CA_FILE` | vide | CA pour MQTTS (étape 5), vide en clair |
+| `MQTT_CA_FILE` | vide | CA locale (`/certs/ca.crt` dans Docker). Obligatoire en `mqtts://` (sinon refus de démarrer), ignorée en `mqtt://` |
 | `DATABASE_URL` | — | Connexion PostgreSQL |
 | `INGEST_TOKEN` | — | Jeton du script IA, 32 caractères min. |
 | `OPERATOR_TOKEN` | — | Jeton du dashboard, 32 caractères min. |
@@ -153,6 +153,7 @@ Modèle complet dans [`.env.example`](.env.example).
 | `OFFLINE_TIMEOUT_S` | `10` | Délai sans message avant passage `offline` |
 | `RATE_LIMIT_PER_MIN` | `120` | Limite globale par IP |
 | `CMD_RATE_LIMIT_PER_MIN` | `20` | Limite sur `POST /commands` |
+| `TRUST_PROXY` | vide | IP du reverse proxy HTTPS, seule autorisée à fixer l'IP client (`X-Forwarded-For`) pour le rate limiting |
 | `DASHBOARD_DIR` | `public` | Dossier du dashboard exporté, servi sur `/` |
 
 ## Sécurité : ce que fait l'API, ce qu'elle ne fait pas
@@ -163,8 +164,12 @@ limiting par IP, corps limités à 4 Ko, messages MQTT limités à 512 octets, r
 paramétrées, aucun secret en dur ni journalisé, erreurs internes jamais détaillées au client,
 `x-powered-by` désactivé, WebSocket filtré par `Origin` et plafonné à 20 clients.
 
-Côté infrastructure (hors API, à la charge d'INFRA/CYBER) : **TLS/MQTTS** (le broker termine
-le TLS, l'API ne fait que fournir `MQTT_CA_FILE`), HTTPS, pare-feu et fermeture du port 1883
+TLS ([docs/tls.md](../docs/tls.md)) : en `mqtts://`, l'API vérifie le certificat du broker avec
+la CA locale (`rejectUnauthorized: true`, nom contrôlé par le SAN) et ne détient aucune clé privée.
+Le HTTPS est terminé par le reverse proxy nginx. L'API ne fait confiance à `X-Forwarded-For` que
+lorsque la requête vient de `TRUST_PROXY`.
+
+Côté infrastructure (hors API, à la charge d'INFRA/CYBER) : pare-feu et fermeture du port 1883
 en production, comptes et ACL Mosquitto (contrat §2), non-exposition de PostgreSQL sur le
 réseau de table (contrat §7).
 
@@ -181,11 +186,15 @@ Image multi-stage (~225 Mo), exécutée en utilisateur `node` (non-root), health
 Le dashboard est servi sur `/`, même origine que le REST et le WebSocket : pas de CORS en
 production. Fichiers exclus du contexte : `api/Dockerfile.dockerignore`.
 
-Stack complète comme en production (broker + base + API/dashboard), depuis la racine :
+Stack complète comme en production (broker + base + API/dashboard, MQTTS), depuis la racine :
 
 ```bash
+./scripts/generate-certs.sh                                              # une fois
 docker compose -f dev/docker-compose.yml --profile full up -d --build
+docker compose -f dev/docker-compose.yml --profile full --profile https up -d   # + HTTPS :443
 ```
+
+Le conteneur reçoit uniquement la CA publique (`certs/public` monté en `/certs:ro`).
 
 Dans `docker-compose.yml` (INFRA) :
 

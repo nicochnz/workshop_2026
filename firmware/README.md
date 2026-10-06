@@ -48,6 +48,8 @@ New-NetFirewallRule -DisplayName "MQTT dev 1883" -Direction Inbound -Protocol TC
 ```
 Le simulateur doit être **arrêté** (mêmes topics).
 
+Passage en MQTTS (port 8883, `ca.crt`, heure NTP indispensable) : voir [docs/tls.md](../docs/tls.md) §4.
+
 **1. Carte seule, rien de branché.** Dans le moniteur série :
 `[WIFI] Connecte` → `[MQTT] Connecte` → une ligne `[TELEMETRIE]` toutes les 2 s
 (`temp`/`hum`/`dist` à `null`, `gas` aléatoire car A0 flotte : c'est normal).

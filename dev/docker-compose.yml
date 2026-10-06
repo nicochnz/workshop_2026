@@ -1,17 +1,26 @@
-# Broker MQTT et base de DÉVELOPPEMENT uniquement (1883 et 55432, en clair).
-# La version officielle (TLS, durcissement, réseau interne) est gérée par INFRA / CYBER.
+# Stack Sentinel-X (base de la version INFRA). Certificats : ./scripts/generate-certs.sh,
+# détails et bascule TLS / fallback dans docs/tls.md.
+#   docker compose -f dev/docker-compose.yml up -d                                   broker + base
+#   docker compose -f dev/docker-compose.yml --profile full up -d --build            + API/dashboard (MQTTS)
+#   docker compose -f dev/docker-compose.yml --profile full --profile https up -d    + HTTPS (nginx)
 services:
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: sx-mosquitto-dev
     entrypoint: ["sh", "/dev-entrypoint.sh"]
     env_file: .env
+    environment:
+      MQTT_PLAIN_LISTENER: ${MQTT_PLAIN_LISTENER:-on}  # off en phase 3
     ports:
-      - "1883:1883"
+      - "8883:8883"  # MQTTS : ESP8266, IA, simulateur
+      - "1883:1883"  # clair : FALLBACK TEMPORAIRE, à retirer en phase 3 (docs/tls.md)
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/listeners:/dev-listeners:ro
       - ./mosquitto/acl:/dev-acl:ro
       - ./mosquitto/entrypoint.sh:/dev-entrypoint.sh:ro
+      # ca.crt + mosquitto.crt + mosquitto.key uniquement (jamais la clé de la CA)
+      - ../certs/mosquitto:/certs:ro
     restart: unless-stopped
 
   # Base de développement de l'API. En production, la base n'est jamais exposée
@@ -33,8 +42,7 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # API + dashboard, comme en production. Lancé seulement avec le profil "full" :
-  #   docker compose -f dev/docker-compose.yml --profile full up -d --build
+  # API + dashboard, comme en production. Lancé seulement avec le profil "full".
   # Sans ce profil, on lance l'API à la main (npm run dev) pour développer.
   api:
     profiles: ["full"]
@@ -47,16 +55,55 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8080
-      MQTT_URL: mqtt://mosquitto:1883
+      # Mode cible MQTTS. Fallback démo : API_MQTT_URL=mqtt://mosquitto:1883 dans dev/.env
+      MQTT_URL: ${API_MQTT_URL:-mqtts://mosquitto:8883}
+      MQTT_CA_FILE: /certs/ca.crt  # ignoré en mqtt://
       MQTT_PASSWORD: ${MQTT_API_PASSWORD}
       DATABASE_URL: postgres://sentinel:${POSTGRES_PASSWORD}@db:5432/sentinel
-      ALLOWED_ORIGINS: http://localhost:8080
+      # HTTP :8080 (fallback) et HTTPS via le proxy. Ajouter l'IP du serveur sur le réseau de table.
+      ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:8080,https://localhost}
+      # Seul le proxy (IP fixe sur le réseau edge) peut fixer l'IP client via X-Forwarded-For.
+      TRUST_PROXY: 172.30.10.10
       DASHBOARD_DIR: public
+    volumes:
+      - ../certs/public:/certs:ro  # CA publique seule : aucune clé privée dans l'API
     ports:
-      - "8080:8080"
+      - "8080:8080"  # HTTP : accès direct, fallback pendant la migration HTTPS
+    networks: [default, edge]
     depends_on:
       mosquitto:
         condition: service_started
       db:
         condition: service_healthy
     restart: unless-stopped
+
+  # Reverse proxy HTTPS : dashboard + REST + WebSocket (wss) + flux vidéo IA, même origine.
+  proxy:
+    profiles: ["https"]
+    image: nginx:1.27-alpine
+    container_name: sx-proxy-dev
+    environment:
+      HTTPS_PORT: ${PROXY_HTTPS_PORT:-443}
+      # Script IA lancé sur l'hôte (hors Docker), flux MJPEG sur :5000
+      AI_VIDEO_UPSTREAM: ${AI_VIDEO_UPSTREAM:-http://host.docker.internal:5000}
+    ports:
+      - "${PROXY_HTTPS_PORT:-443}:443"
+      - "${PROXY_HTTP_PORT:-80}:80"  # redirige vers HTTPS
+    volumes:
+      - ./proxy/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ../certs/proxy:/etc/nginx/certs:ro  # proxy.crt + proxy.key uniquement
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # natif sous Docker Desktop, requis sous Docker Engine Linux
+    networks:
+      edge:
+        ipv4_address: 172.30.10.10
+    depends_on:
+      - api
+    restart: unless-stopped
+
+networks:
+  # Réseau proxy ↔ API, sous-réseau fixe pour que l'API ne fasse confiance qu'au proxy.
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24

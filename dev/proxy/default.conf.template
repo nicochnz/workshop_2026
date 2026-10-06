@@ -1,0 +1,61 @@
+# Reverse proxy HTTPS de Sentinel-X (docs/tls.md). Une seule origine pour le navigateur :
+#   /            → API (dashboard statique + REST /api/v1)
+#   /ws          → API (WebSocket : la page HTTPS ouvre wss://, jamais ws://)
+#   /video_feed  → script IA sur l'hôte (MJPEG en HTTP), évite le Mixed Content
+# ${HTTPS_PORT} et ${AI_VIDEO_UPSTREAM} sont remplacés au démarrage par l'image nginx.
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server_tokens off;
+
+server {
+    listen 80;
+    return 301 https://$host:${HTTPS_PORT}$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+
+    ssl_certificate     /etc/nginx/certs/proxy.crt;
+    ssl_certificate_key /etc/nginx/certs/proxy.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:1m;
+
+    # L'API refuse déjà au-delà de 4 Ko (contrat §4.3) ; on coupe plus tôt.
+    client_max_body_size 16k;
+
+    # Pas de HSTS : il s'appliquerait aussi à http://localhost:8080 (fallback de démo).
+
+    # X-Forwarded-For écrasé (pas ajouté) : un client ne peut pas usurper une autre IP.
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-For   $remote_addr;
+    proxy_set_header X-Forwarded-Proto https;
+
+    # « api » résolu à chaque requête (DNS Docker) : un conteneur API recréé change d'IP,
+    # sans cela nginx garderait l'ancienne et renverrait 502 jusqu'à son redémarrage.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $api_upstream http://api:8080;
+
+    location / {
+        proxy_pass $api_upstream;
+    }
+
+    location = /ws {
+        proxy_pass $api_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 1h;
+    }
+
+    location = /video_feed {
+        proxy_pass ${AI_VIDEO_UPSTREAM};
+        # Flux continu : transmis image par image, sans mise en tampon.
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+    }
+}
