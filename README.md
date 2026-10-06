@@ -42,7 +42,7 @@ Toutes les interfaces (topics, JSON, routes, codes HTTP) sont définies dans **[
 
 | Brique     | Technologie                                                        |
 |------------|--------------------------------------------------------------------|
-| Firmware   | C++ / PlatformIO — PubSubClient, ArduinoJson, DHT, SSD1306          |
+| Firmware   | C++ / PlatformIO — 256dpi/MQTT, ArduinoJson, DHT, SSD1306          |
 | API        | Node.js + TypeScript, Express, mqtt.js, zod, ws, pg                 |
 | Base       | PostgreSQL                                                         |
 | Dashboard  | Next.js (React, export statique) + TypeScript + Tailwind + Chart.js |
