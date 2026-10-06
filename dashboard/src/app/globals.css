@@ -28,11 +28,31 @@
 
   --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+
+  /* Pulsation du bandeau d'alerte critique (coupée si prefers-reduced-motion) */
+  --animate-alarm: alarm 1.4s ease-in-out infinite;
+
+  @keyframes alarm {
+    0%,
+    100% {
+      box-shadow: 0 0 10px -2px var(--color-crit);
+    }
+    50% {
+      box-shadow: 0 0 36px 4px var(--color-crit);
+    }
+  }
 }
 
 @layer base {
   html {
     color-scheme: dark;
+  }
+
+  /* Vidéoprojecteur / grand écran : tout est agrandi proportionnellement */
+  @media (min-width: 1920px) {
+    html {
+      font-size: 112.5%;
+    }
   }
 
   body {

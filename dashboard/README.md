@@ -71,4 +71,8 @@ Règles d'accessibilité : contraste ≥ 4,5:1 pour tout texte, focus clavier vi
 information n'est jamais portée par la couleur seule (icône + texte), animations coupées si
 `prefers-reduced-motion`.
 
+Démo : bandeau pulsant pour la dernière alerte critique (2 min, bouton « Acquitter »), bandeau
+permanent si le boîtier est hors ligne, titre d'onglet « ⚠ ALERTE », texte agrandi de 12,5 % au-delà
+de 1920 px (vidéoprojecteur). Tout élément cliquable affiche le curseur main (règle globale).
+
 Pas de `next/font/google` : le build doit fonctionner sans Internet sur le réseau de table.

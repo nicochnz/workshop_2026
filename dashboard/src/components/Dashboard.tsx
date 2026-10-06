@@ -3,6 +3,7 @@
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useNow } from "@/hooks/useNow";
 import { clearToken } from "@/lib/token";
+import { AlertBanner } from "./AlertBanner";
 import { AlertList } from "./AlertList";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { ControlPanel } from "./ControlPanel";
@@ -40,6 +41,8 @@ export function Dashboard({ token }: { token: string }) {
         </div>
       </header>
       <div className="neon-rule" aria-hidden="true" />
+
+      <AlertBanner alerts={data.alerts} status={data.status} now={now} />
 
       {data.loadError && (
         <p role="alert" className="rounded-lg border border-crit/60 bg-crit/10 px-3 py-2 text-sm text-crit">
