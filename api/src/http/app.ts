@@ -38,6 +38,8 @@ export function createApp(deps: AppDeps): Express {
   const app = express();
 
   app.disable("x-powered-by");
+  // Derrière le proxy HTTPS, sans quoi tous les clients partageraient le quota de l'IP du proxy.
+  if (config.TRUST_PROXY) app.set("trust proxy", config.TRUST_PROXY);
   app.use(securityHeaders);
   app.use(devCors(config));
 

@@ -11,6 +11,12 @@
 **/npm-debug.log*
 **/CLAUDE.md
 **/.claude
+# Certificats et clés TLS : jamais dans le contexte de build (docs/tls.md)
+certs
+**/*.key
+**/*.pem
+**/*.crt
+scripts
 .git
 api/test
 firmware

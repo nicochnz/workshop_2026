@@ -38,6 +38,7 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     OFFLINE_TIMEOUT_S: 10,
     RATE_LIMIT_PER_MIN: 1000,
     CMD_RATE_LIMIT_PER_MIN: 1000,
+    TRUST_PROXY: "",
     DASHBOARD_DIR: "no-dashboard-in-tests",
     ...overrides,
   };

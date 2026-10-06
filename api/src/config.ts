@@ -11,7 +11,7 @@ const envSchema = z.object({
   MQTT_USERNAME: z.string().min(1).default("api"),
   MQTT_PASSWORD: z.string().min(1),
   MQTT_CLIENT_ID: z.string().min(1).default("api-g3"),
-  // Chemin du CA pour MQTTS (étape 5). Vide tant que le broker est en clair.
+  // CA pour MQTTS (docs/tls.md). Obligatoire en mqtts://, ignoré en mqtt://.
   MQTT_CA_FILE: z.string().default(""),
 
   DATABASE_URL: z.string().min(1),
@@ -24,6 +24,9 @@ const envSchema = z.object({
   OFFLINE_TIMEOUT_S: z.coerce.number().int().min(1).default(10),
   RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(120),
   CMD_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(20),
+  // IP(s) du reverse proxy HTTPS, seules autorisées à fixer l'IP client (X-Forwarded-For)
+  // pour le rate limiting. Vide = aucun proxy de confiance : l'en-tête est ignoré.
+  TRUST_PROXY: z.string().default(""),
 
   /** Dossier du dashboard exporté (`dashboard/out`), servi en statique sur `/`. */
   DASHBOARD_DIR: z.string().default("public"),
