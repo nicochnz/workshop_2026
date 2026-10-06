@@ -30,7 +30,8 @@ void displayRender(const Reading& r, bool wifiUp, bool mqttUp, const String& ip)
   oled.clearDisplay();
   oled.setCursor(0, 0);
   oled.println("SENTINEL-X " DEVICE_ID);
-  oled.printf("WiFi:%s  MQTT:%s\n", wifiUp ? "OK" : "--", mqttUp ? "OK" : "--");
+  // « MQTTS » visible sur l'écran : preuve physique du chiffrement pour la démo
+  oled.printf("WiFi:%s  %s:%s\n", wifiUp ? "OK" : "--", USE_TLS ? "MQTTS" : "MQTT", mqttUp ? "OK" : "--");
   oled.println(wifiUp ? ip : String("IP: --"));
 
   if (isnan(r.temp) || isnan(r.hum)) oled.println("T: --   H: --");

@@ -1,99 +1,96 @@
 # Sentinel-X — Groupe 3 (Workshop EPSI M1 2026)
 
-Boîtier de surveillance autonome (Edge Node) relié à un PC Serveur Local.
-Un ESP8266 mesure température, humidité, gaz et présence (ultrason) et envoie ses mesures en MQTT
-au serveur. Celui-ci les stocke, détecte les intrus par webcam (YOLO) et les anomalies (maintenance
-prédictive), puis affiche tout en temps réel sur un dashboard qui pilote le buzzer et les LEDs du boîtier.
+Sentinel-X est un **boîtier de surveillance** pour site industriel isolé. Il mesure la température,
+l'humidité, le gaz et la présence, et envoie ses mesures sans fil à un **serveur local**.
+Le serveur enregistre tout, repère les intrus grâce à une webcam (IA) et affiche l'ensemble en
+temps réel sur un **tableau de bord web**, d'où l'on peut déclencher l'alarme du boîtier à distance.
 
-**Architecture retenue : option B** — le laptop d'un membre de l'équipe est le serveur et le point
-d'accès Wi-Fi.
+**Architecture retenue : option B** — le serveur est le laptop d'un membre de l'équipe, qui sert
+aussi de point d'accès Wi-Fi.
 
 ---
 
-## État d'avancement
+## Où en est le projet
 
-| Brique | État | Détails |
+| Brique | État | Responsable |
 |---|---|---|
-| Contrat d'interface | ✅ v1.2 | [docs/contrat.md](docs/contrat.md) : topics MQTT, JSON, REST, WebSocket |
-| Simulateur (faux ESP) | ✅ | Télémétrie, alertes, statut, commandes, scénarios au clavier |
-| API + PostgreSQL | ✅ | REST, WebSocket, ingestion MQTT, 73 tests |
-| Dashboard | ✅ | Courbes live, état, alertes, commandes, vidéo IA, bandeaux d'alerte |
-| Image Docker API + dashboard | ✅ | Le dashboard est construit dans l'image et servi par l'API |
-| Firmware ESP8266 | 🟡 | Compile ; test sur carte et câblage des capteurs à faire |
-| Scripts IA (vision + prédictif) | ⏳ | Équipe IA : `POST /api/v1/alerts` + flux MJPEG `:5000/video_feed` |
-| Docker Compose final + Wi-Fi de table | ⏳ | Équipe INFRA |
-| TLS (MQTTS 8883, HTTPS 443) | 🟡 | CA locale ECDSA, broker + API + simulateur en MQTTS, HTTPS/WSS via nginx ; ESP à passer en TLS — [docs/tls.md](docs/tls.md) |
+| Contrat d'interface (règles communes) | ✅ | Nicolas |
+| Simulateur (faux boîtier pour tester sans matériel) | ✅ | Nicolas |
+| API + base de données | ✅ | Thomas |
+| Tableau de bord (dashboard) | ✅ | Nicolas, Raphael |
+| Chiffrement TLS (MQTTS, HTTPS) | ✅ serveur · 🟡 boîtier : code prêt, à tester sur la carte | Thomas · Nicolas |
+| Firmware du boîtier (ESP8266) | 🟡 en test sur la plaquette | Nicolas, Baptiste |
+| Scripts IA (webcam + prédiction) | ⏳ | Équipe IA |
+| Wi-Fi de table et laptop serveur final | ⏳ | Équipe INFRA |
+
+Ce qu'il reste à faire est détaillé dans [Reste à faire](#reste-à-faire).
 
 ---
 
-## Architecture
+## Comment ça marche
 
 ```
- ┌──────────────────────── Boîtier SX-003 ───────────────────────────┐
- │ ESP8266 : DHT11 · MQ (gaz) · ultrason · OLED · buzzer · LEDs      │
- └──────────────────────┬────────────────────────────────────────────┘
-                        │ Wi-Fi 192.168.10.0/24 — MQTT(S)
- ┌────────────── Laptop serveur (PC Serveur Local) 192.168.10.1 ───┐
- │  Docker Compose                                                 │
- │   ├─ Mosquitto (broker MQTT)        :8883 TLS (+ :1883 secours) │
- │   ├─ nginx (HTTPS, WSS, vidéo IA)   :443                        │
- │   ├─ API Node.js + dashboard        :8080  ──► PostgreSQL       │
- │   └─ PostgreSQL                     (réseau interne uniquement) │
- │  Script IA Python (webcam USB + YOLO, Isolation Forest) :5000   │
- └─────────────────────────────────────────────────────────────────┘
-                        │ HTTP(S) + WebSocket
-                 Navigateur (dashboard)
+ ┌──────────────── Boîtier SX-003 ─────────────────┐
+ │ ESP8266 + capteurs (temp., humidité, gaz,      │
+ │ distance) + écran OLED + buzzer + LEDs         │
+ └───────────────────────┬─────────────────────────┘
+                         │ Wi-Fi, messages MQTT chiffrés (port 8883)
+ ┌──────────── Laptop serveur 192.168.10.1 ────────────────────────┐
+ │  Mosquitto    reçoit et distribue les messages du boîtier       │
+ │  API          vérifie, enregistre (PostgreSQL), diffuse en live │
+ │  nginx        sert le dashboard en HTTPS (port 443)             │
+ │  Script IA    analyse la webcam et les mesures                  │
+ └───────────────────────┬─────────────────────────────────────────┘
+                         │ HTTPS
+                 Navigateur : dashboard
 ```
 
-Flux :
-1. L'ESP (ou le simulateur) publie `telemetry` toutes les 2 s, `alerts` sur événement et `status`
-   toutes les 10 s. En cas de coupure brutale, le broker publie `offline` à sa place (LWT).
-2. L'API s'abonne, valide chaque message, le stocke dans PostgreSQL et le pousse au dashboard
-   par WebSocket.
-3. Le script IA lit `telemetry` (MQTT) et la webcam, puis envoie ses alertes via `POST /api/v1/alerts`.
-4. Le dashboard envoie les commandes via `POST /api/v1/commands` ; l'API publie sur `cmd`,
-   le boîtier exécute et confirme sur `ack`, et le dashboard affiche « Commande exécutée ».
+En quelques mots :
 
-Toutes les interfaces sont définies dans **[docs/contrat.md](docs/contrat.md)** : c'est la référence
-de toute l'équipe.
+1. Le boîtier envoie ses **mesures toutes les 2 s**, ses **alertes** (gaz, présence) et son
+   **état** (en ligne / hors ligne).
+2. L'**API** contrôle chaque message, l'enregistre et le transmet **instantanément** au dashboard.
+3. L'**IA** surveille la webcam et les courbes, et signale les intrus ou les anomalies à l'API.
+4. Depuis le dashboard, un clic sur « Buzzer » envoie un **ordre au boîtier**, qui confirme
+   l'avoir exécuté.
 
-## Stack
+Tous ces échanges suivent des règles communes, écrites dans le
+**[contrat d'interface](docs/contrat.md)** : c'est la référence de toute l'équipe.
 
-| Brique     | Technologie                                                          |
-|------------|----------------------------------------------------------------------|
-| Firmware   | C++ / PlatformIO — 256dpi/MQTT, ArduinoJson 7, DHT, SSD1306           |
-| API        | Node.js 20 + TypeScript, Express 5, mqtt.js, zod, ws, pg              |
-| Base       | PostgreSQL 16                                                        |
-| Dashboard  | Next.js 16 (export statique) + React 19 + TypeScript + Tailwind 4 + Chart.js |
-| Broker     | Mosquitto 2                                                          |
-| Simulateur | Node.js + TypeScript, mqtt.js                                        |
-| IA         | Python, OpenCV, YOLOv8, scikit-learn                                 |
+### Technologies
 
-## Structure du dépôt
+| Brique | Technologies |
+|---|---|
+| Boîtier | ESP8266, C++ (PlatformIO) |
+| Messages | MQTT avec le broker Mosquitto |
+| API | Node.js, TypeScript, Express, PostgreSQL |
+| Dashboard | Next.js (React), Tailwind CSS, Chart.js |
+| Sécurité | TLS : certificats générés localement, nginx pour le HTTPS |
+| IA | Python, OpenCV, YOLOv8, scikit-learn |
+| Déploiement | Docker Compose |
+
+### Organisation du dépôt
 
 ```
-/api         API Express (MQTT, PostgreSQL, REST, WebSocket) + Dockerfile (embarque le dashboard)
-/dashboard   dashboard Next.js, exporté en statique et servi par l'API
-/firmware    projet PlatformIO ESP8266
-/simulator   faux ESP8266 pour développer sans matériel
-/dev         stack Docker : Mosquitto, PostgreSQL, API, reverse proxy HTTPS (docker compose)
-/scripts     generate-certs.sh : CA locale et certificats TLS (sortie dans certs/, ignoré par Git)
-/docs        contrat d'interface, câblage, composants
+api/         l'API (et son image Docker, qui contient aussi le dashboard)
+dashboard/   le tableau de bord web
+firmware/    le programme du boîtier ESP8266
+simulator/   le faux boîtier, pour tester sans matériel
+dev/         la configuration Docker (broker, base, API, HTTPS)
+scripts/     generate-certs.sh : crée les certificats de chiffrement
+docs/        contrat d'interface, TLS, câblage, liste du matériel
 ```
-
-## Prérequis
-
-- Node.js 20.9+
-- Docker Desktop (Docker Compose v2)
-- VS Code + extension PlatformIO IDE (firmware uniquement)
 
 ---
 
-## Démarrage rapide : tout le système en 5 minutes, sans matériel
+## Lancer le projet (sans matériel, ~5 minutes)
 
-Toutes les commandes partent de la **racine du dépôt**.
+**Prérequis :** Node.js 20.9 ou plus, Docker Desktop, et Git Bash sous Windows.
+Toutes les commandes se lancent depuis la **racine du dépôt**.
 
-**1. Configurer les secrets** (fichiers ignorés par Git) :
+### 1. Créer les fichiers de configuration
+
+Ils contiennent les mots de passe et ne sont **jamais envoyés sur GitHub**.
 
 ```bash
 cp dev/.env.example dev/.env
@@ -101,171 +98,194 @@ cp api/.env.example api/.env
 cp simulator/.env.example simulator/.env
 ```
 
-Dans `api/.env`, remplacer `INGEST_TOKEN` et `OPERATOR_TOKEN` par des valeurs aléatoires :
+Dans `api/.env`, remplacer les deux jetons d'accès `INGEST_TOKEN` et `OPERATOR_TOKEN` par des
+valeurs aléatoires, générées avec :
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Générer la CA locale et les certificats TLS (Git Bash sous Windows, une seule fois) :
+> Après un `git pull`, si un fichier `.env.example` a changé, recopier le `.env` correspondant.
+
+### 2. Créer les certificats de chiffrement (une seule fois)
 
 ```bash
 ./scripts/generate-certs.sh
 ```
 
-**2. Lancer broker + base + API/dashboard** (comme en production, API ↔ broker en MQTTS) :
+Ils sont rangés dans `certs/`, qui n'est jamais envoyé sur GitHub.
+
+### 3. Démarrer le serveur
 
 ```bash
-docker compose -f dev/docker-compose.yml --profile full up -d --build
+docker compose -f dev/docker-compose.yml --profile full --profile https up -d --build
 ```
 
-Avec HTTPS (reverse proxy nginx sur 443) : ajouter `--profile https` et ouvrir
-`https://localhost` après avoir importé `certs/public/ca.crt` (voir [docs/tls.md](docs/tls.md) §5).
+Le premier lancement prend quelques minutes.
 
-Le premier build prend quelques minutes (il construit l'API et le dashboard).
-
-**3. Lancer le faux boîtier** :
+### 4. Démarrer le faux boîtier
 
 ```bash
-cd simulator && npm install && npm start
+cd simulator
+npm install
+npm start
 ```
 
-**4. Ouvrir http://localhost:8080** et saisir l'`OPERATOR_TOKEN` de `api/.env`.
+### 5. Ouvrir le dashboard
 
-Le voyant passe **EN LIGNE**, les courbes avancent toutes les 2 s.
+- **https://localhost** (chiffré). Pour éviter l'alerte de sécurité du navigateur, déclarer une
+  fois notre certificat comme fiable :
+  `certutil -addstore -user Root certs/public/ca.crt` (Windows), puis redémarrer le navigateur.
+- ou **http://localhost:8080** (non chiffré, solution de secours).
 
-**5. Jouer les scénarios** dans le terminal du simulateur :
+Se connecter avec l'`OPERATOR_TOKEN` de `api/.env`. Le voyant passe **EN LIGNE** et les courbes
+avancent toutes les 2 s.
 
-| Touche | Effet visible sur le dashboard |
+### 6. Tester les scénarios
+
+Dans le terminal du simulateur, appuyer sur une touche :
+
+| Touche | Ce qui se passe sur le dashboard |
 |---|---|
-| `g` | Fuite de gaz : courbe qui monte, badge ▲ Alerte puis ⬢ Critique, **bandeau rouge pulsant** |
-| `i` | Intrus : la distance chute, badge ▲ Présence, alerte « Présence » |
-| `h` | Échauffement lent (temp. + gaz) sous les seuils : cas d'école pour l'IA prédictive |
+| `g` | **Fuite de gaz** : la courbe monte, puis un bandeau rouge d'alerte critique apparaît |
+| `i` | **Intrus** : la distance chute, une alerte « Présence » apparaît |
+| `h` | **Échauffement lent** : dérive progressive, utile pour tester l'IA prédictive |
 | `n` | Retour à la normale |
-| `x` | Envoi d'un message hors contrat : l'API le rejette, rien ne s'affiche |
-| `q` | Crash du boîtier : voyant **HORS LIGNE** + bandeau en ~10 s |
+| `q` | **Panne du boîtier** : il passe « HORS LIGNE » en ~10 s |
 
-Les boutons du panneau **Commandes** (buzzer, LEDs, SILENCE) s'affichent dans le terminal du
-simulateur (🔔, 🔴, 🟢) et le dashboard confirme « ✓ Commande exécutée ».
+Les boutons **Buzzer**, **LED** et **Silence** du dashboard s'affichent dans le terminal du
+simulateur, et le dashboard confirme « Commande exécutée ».
 
-**Arrêter** : `Ctrl+C` dans le simulateur, puis
-`docker compose -f dev/docker-compose.yml --profile full down` (les données sont conservées).
+**Tout arrêter :** `Ctrl+C` dans le simulateur, puis
+`docker compose -f dev/docker-compose.yml --profile full --profile https down`.
+Les données sont conservées.
 
 ---
 
-## Développer une brique
+## Le jour de la démo
 
-Pour modifier le code avec rechargement instantané, on lance l'API et le dashboard hors Docker.
-Seuls le broker et la base restent en conteneurs.
+- Le **vrai boîtier** remplace le simulateur. Il ne faut **jamais lancer les deux en même temps** :
+  ils utilisent la même identité et se déconnectent l'un l'autre.
+- Mode visé : tout chiffré (boîtier en MQTTS, dashboard en HTTPS).
+- **Plan B :** chaque brique peut repasser en non chiffré en changeant un seul réglage
+  ([docs/tls.md](docs/tls.md) §6). Si le boîtier tombe en panne, le simulateur prend le relais,
+  en le **disant clairement** au jury.
+
+---
+
+## Développer
+
+Pour modifier le code avec rechargement automatique, on garde le broker et la base dans Docker
+et on lance la brique concernée à la main.
 
 ```bash
-docker compose -f dev/docker-compose.yml --profile full stop api   # si la stack complète tourne
-docker compose -f dev/docker-compose.yml up -d                      # Mosquitto (8883 TLS + 1883) + PostgreSQL (55432)
+docker compose -f dev/docker-compose.yml --profile full stop api   # libère le port 8080
+docker compose -f dev/docker-compose.yml up -d                      # broker + base
 ```
 
-| Brique | Commandes | Adresse | Doc |
+| Brique | Commande | Adresse | Documentation |
 |---|---|---|---|
 | API | `cd api && npm install && npm run dev` | http://localhost:8080 | [api/README.md](api/README.md) |
 | Dashboard | `cd dashboard && cp .env.example .env.local && npm install && npm run dev` | http://localhost:3100 | [dashboard/README.md](dashboard/README.md) |
 | Simulateur | `cd simulator && npm start` | — | [simulator/README.md](simulator/README.md) |
-| Firmware | PlatformIO : compiler, téléverser, moniteur série | — | [firmware/README.md](firmware/README.md) |
+| Firmware | PlatformIO dans VS Code | — | [firmware/README.md](firmware/README.md) |
 
-Vérifications : `npm run typecheck`, `npm run lint` (dashboard) et `npm test` (API).
+Vérifier son code avant un commit : `npm run typecheck` partout, `npm run lint` (dashboard),
+`npm test` (API).
 
-### Observer le trafic MQTT
+Voir passer tous les messages MQTT :
 
 ```bash
 docker exec -it sx-mosquitto-dev mosquitto_sub -u monitor -P change-me-monitor -t "sentinel/g3/#" -v
 ```
 
-### Ports de développement
-
-| Port | Service |
-|---|---|
-| 8883 | Mosquitto MQTTS |
-| 1883 | Mosquitto en clair (fallback temporaire) |
-| 443 / 80 | Dashboard en HTTPS via nginx (80 redirige vers 443), profil `https` |
-| 55432 | PostgreSQL de dev (évite le conflit avec un PostgreSQL local) |
-| 8080 | API + dashboard |
-| 3100 | Dashboard en mode dev (`next dev`) |
-
 ---
-
-## Le dashboard en bref
-
-- **Accès** : saisie du jeton opérateur, vérifié auprès de l'API puis gardé le temps de l'onglet.
-- **État du boîtier** : en ligne / hors ligne, IP, signal Wi-Fi, durée de service, firmware,
-  ancienneté de la dernière mesure.
-- **Mesures en direct** : 4 courbes (température, humidité, gaz, distance) sur 5 min, avec les
-  seuils d'alerte en pointillés.
-- **Alertes** : historique de toutes les sources (boîtier, IA vision, IA prédictive, système).
-- **Commandes** : buzzer (1 à 10 s), LED rouge, LED verte, **SILENCE**. Chaque commande suit son
-  cycle : envoyée, exécutée, refusée ou sans réponse.
-- **Vision IA** : flux webcam annoté par l'IA, avec un message et « Réessayer » si le flux est absent.
-- **Démo** : bandeau pulsant pour l'alerte critique (« Acquitter »), bandeau hors ligne, titre
-  d'onglet « ⚠ ALERTE », reconnexion automatique du temps réel, texte agrandi sur vidéoprojecteur.
-- **Thème néon** sur la palette de l'équipe, contrastes vérifiés (WCAG) et curseur main sur tout
-  ce qui est cliquable.
-
-## Dépannage
-
-| Symptôme | Cause et solution |
-|---|---|
-| Le dashboard affiche une ancienne version | Onglet ouvert avant le dernier build : **Ctrl+F5** |
-| Simulateur : « Reconnexion au broker… » en boucle | Deux clients avec le même client ID (deux simulateurs, ou simulateur + ESP) : n'en garder qu'un |
-| Port 8080 ou 3000 déjà utilisé | Un autre projet tourne : `docker ps`, puis arrêter le conteneur concerné |
-| « Jeton refusé par l'API » | Copier l'`OPERATOR_TOKEN` exact de `api/.env` ; après un changement, relancer l'API |
-| Erreur CORS en dev sur :3100 | L'API doit tourner avec `NODE_ENV=development` et `ALLOWED_ORIGINS` contenant `http://localhost:3100` |
-| « Flux vidéo indisponible » | Normal tant que le script IA ne diffuse pas sur le port 5000 |
-| L'ESP ne joint pas le broker | Pare-feu Windows : ouvrir le port 1883 (ou 8883) entrant (voir [firmware/README.md](firmware/README.md)) |
-| API : « CA MQTT illisible » ou « MQTT_CA_FILE est vide » | Lancer `./scripts/generate-certs.sh`, ou passer en fallback `API_MQTT_URL=mqtt://mosquitto:1883` ([docs/tls.md](docs/tls.md) §6) |
-| Alerte de certificat dans le navigateur | Importer `certs/public/ca.crt` comme autorité racine ([docs/tls.md](docs/tls.md) §5) |
-| Problème TLS juste avant la démo | Fallback en clair, une variable à changer : [docs/tls.md](docs/tls.md) §6 |
-
----
-
-## Réseau (option B)
-
-| Appareil       | IP                    |
-|----------------|-----------------------|
-| Laptop serveur | `192.168.10.1`        |
-| ESP8266        | `192.168.10.20`       |
-| Postes équipe  | `192.168.10.50 → .60` |
-
-Ports exposés : 8883 (MQTTS), 443 (dashboard HTTPS), 8080 (API + dashboard en HTTP, fallback),
-5000 (flux vidéo IA), 22 (SSH par clé). Le port 1883 (MQTT en clair) reste ouvert en fallback
-temporaire, puis est fermé en phase 3 ([docs/tls.md](docs/tls.md) §7).
 
 ## Sécurité
 
-- Aucun secret dans le dépôt : `.env`, `.env.local` et `firmware/include/secrets.h` sont ignorés
-  par Git. Des modèles `.env.example` et `secrets.example.h` sont fournis.
-- API : validation stricte de toute entrée (champs inconnus rejetés), jetons Bearer comparés en temps
-  constant, rate limiting, corps limités à 4 Ko, requêtes SQL paramétrées, WebSocket filtré par origine.
-- Dashboard : aucun jeton dans le code, jeton en `sessionStorage`, servi à la même origine que l'API
-  (pas de CORS en production).
-- Image Docker : multi-stage, utilisateur non-root, healthcheck.
-- MQTT : connexion anonyme interdite, un compte et des ACL par client, MQTTS (TLS 1.2+) avec
-  vérification du certificat par la CA locale.
-- TLS : CA locale ECDSA P-256, clés privées jamais commitées ni montées dans l'API, HTTPS/WSS
-  et flux vidéo servis à la même origine par nginx. Détails : [docs/tls.md](docs/tls.md).
+Le système sera attaqué par les autres groupes (pentest du jeudi). Les protections en place :
 
-## Documentation
+- **Rien de secret sur GitHub** : mots de passe, jetons et certificats restent sur les postes.
+- **Tout est chiffré** : messages MQTT en TLS (port 8883), dashboard en HTTPS (port 443).
+  Le boîtier et l'API vérifient l'identité du serveur, ce qui bloque l'espionnage du réseau
+  (attaque « homme du milieu »).
+- **Accès contrôlés** : chaque appareil a son compte MQTT avec des droits limités, et l'API exige
+  un jeton.
+- **Entrées vérifiées** : tout message mal formé ou inattendu est rejeté (protection contre les
+  injections). Le nombre et la taille des requêtes sont limités (protection contre la saturation).
+- **Conteneurs durcis** : l'API tourne sans droits administrateur, et la base n'est pas joignable
+  depuis le réseau.
 
-- [Contrat d'interface](docs/contrat.md) — topics MQTT, formats JSON, API REST, WebSocket
-- [TLS](docs/tls.md) — certificats, MQTTS, HTTPS, ESP8266 et heure, fallback démo
-- [API](api/README.md) — routes, WebSocket, variables d'environnement, Docker
-- [Dashboard](dashboard/README.md) — thème, accessibilité, structure, build statique
-- [Simulateur](simulator/README.md) — scénarios, commandes de test
-- [Firmware](firmware/README.md) — flash, tests, calibration
-- [Câblage](docs/cablage.md) — brochage du boîtier
+Détails du chiffrement : [docs/tls.md](docs/tls.md).
+
+---
+
+## Réseau
+
+| Appareil | Adresse IP |
+|---|---|
+| Laptop serveur | `192.168.10.1` |
+| Boîtier ESP8266 | `192.168.10.20` |
+| Postes de l'équipe | `192.168.10.50` à `.60` |
+
+| Port | Usage |
+|---|---|
+| 8883 | Messages MQTT chiffrés (boîtier, IA) |
+| 443 | Dashboard en HTTPS (80 redirige vers 443) |
+| 8080 | Dashboard non chiffré (secours) |
+| 5000 | Vidéo de l'IA |
+| 1883 | Messages MQTT non chiffrés (secours, à fermer une fois le TLS validé) |
+| 55432 | Base de données de développement (sur le poste uniquement) |
+| 3100 | Dashboard en mode développement |
+
+---
+
+## Dépannage
+
+| Problème | Solution |
+|---|---|
+| Le dashboard affiche une ancienne version | Recharger sans cache : **Ctrl+F5** |
+| Le simulateur affiche « Reconnexion au broker… » en boucle | Deux faux boîtiers (ou simulateur + vrai boîtier) tournent en même temps : n'en garder qu'un |
+| « Jeton refusé par l'API » | Copier exactement l'`OPERATOR_TOKEN` de `api/.env` |
+| Alerte de sécurité dans le navigateur | Déclarer le certificat comme fiable (étape 5), ou passer par http://localhost:8080 |
+| L'API ou le simulateur ne démarre pas : « CA MQTT illisible » | Lancer `./scripts/generate-certs.sh` |
+| Un port est déjà utilisé (8080, 443…) | Un autre logiciel l'occupe : `docker ps` pour le trouver et l'arrêter |
+| « Flux vidéo indisponible » | Normal tant que le script IA ne tourne pas |
+| Le boîtier ne se connecte pas au serveur | Ouvrir les ports dans le pare-feu Windows (voir [firmware/README.md](firmware/README.md)) |
+
+---
+
+## Reste à faire
+
+| Tâche | Qui |
+|---|---|
+| Tester le firmware sur la plaquette, puis calibrer les seuils (gaz, présence) | Baptiste, Nicolas |
+| Tester le boîtier en MQTTS sur la carte (code prêt : [firmware/README.md](firmware/README.md#passer-en-mqtts-chiffré)) | Nicolas, Baptiste |
+| Fournir l'heure au boîtier sans Internet (serveur NTP local) | Thomas / INFRA |
+| Brancher les scripts IA (alertes + vidéo) | Équipe IA |
+| Mettre en place le Wi-Fi de table sur le laptop serveur | Équipe INFRA |
+| Fermer les ports de secours (1883, 8080, 5000) une fois tout validé en TLS | Thomas |
+| Auto-test de sécurité avant le pentest de jeudi | Toute l'équipe |
+| Scénario de démo minuté et plan B | Toute l'équipe |
+
+---
+
+## Documentation détaillée
+
+- [Contrat d'interface](docs/contrat.md) — messages MQTT, API, temps réel
+- [TLS](docs/tls.md) — certificats, chiffrement, heure du boîtier, plan B
+- [API](api/README.md) — routes, variables, Docker
+- [Dashboard](dashboard/README.md) — thème, accessibilité, structure
+- [Simulateur](simulator/README.md) — scénarios, tests
+- [Firmware](firmware/README.md) — installation, flash, tests sur carte
+- [Câblage](docs/cablage.md) — branchement des composants
 - [Composants](docs/composants.md) — matériel disponible
 
 ## Équipe
 
-| Membre   | Filière       | Responsabilité                                               |
-|----------|---------------|--------------------------------------------------------------|
-| Nicolas  | EISI DEV      | Contrat, simulateur, firmware, dashboard, contrôle réactif    |
-| Baptiste | _à compléter_ | _à compléter_                                                |
-| Raphael  | _à compléter_ | _à compléter_                                                |
-| Baptiste | _à compléter_ | _à compléter_                                                |
+| Membre | Rôle |
+|---|---|
+| Nicolas | Contrat d'interface, simulateur, firmware, dashboard |
+| Raphael | Intégration, dashboard |
+| Thomas | API, tests, chiffrement TLS |
+| Baptiste | Câblage du boîtier, tests du firmware |
