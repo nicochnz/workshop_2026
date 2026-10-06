@@ -34,8 +34,9 @@ n'importe quel shell sous Linux) :
   certificats serveur : le `ca.crt` déjà flashé dans l'ESP reste valable.
 - `./scripts/generate-certs.sh --renew-ca` crée une nouvelle CA. Il faut alors redistribuer
   `ca.crt` (firmware, IA, navigateurs).
-- `EXTRA_SAN="IP:192.168.1.42" ./scripts/generate-certs.sh` ajoute une adresse au SAN, par
-  exemple l'IP du PC de dev quand on teste l'ESP sur un autre réseau.
+- `EXTRA_SAN="IP:192.168.1.42,DNS:192.168.1.42" ./scripts/generate-certs.sh` ajoute une adresse
+  au SAN, par exemple l'IP du PC de dev quand on teste l'ESP sur un autre réseau. **Mettre les deux
+  formes** : l'ESP (BearSSL) ne lit que l'entrée `DNS:` (voir ci-dessous).
 - **Générer les certificats sur une machine à l'heure** : leur début de validité est l'heure de
   génération (voir §5).
 
@@ -112,7 +113,11 @@ Contrôle : `docker logs sx-api-dev` doit afficher
 `MQTT connecté à mqtts://mosquitto:8883 (client api-g3)`, et le broker
 `Client api-g3 negotiated TLSv1.3`.
 
-## 4. ESP8266 (préparation, le firmware n'est pas modifié)
+## 4. ESP8266
+
+> **Intégré au firmware** : interrupteur `USE_TLS` dans `secrets.h`, procédure dans
+> [firmware/README.md](../firmware/README.md#passer-en-mqtts-chiffré). Pour l'heure, l'option B
+> (date de compilation) est en place comme secours ; l'option A (NTP local) reste à déployer.
 
 | Élément | Valeur |
 |---|---|

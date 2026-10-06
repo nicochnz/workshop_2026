@@ -18,7 +18,7 @@ aussi de point d'accès Wi-Fi.
 | Simulateur (faux boîtier pour tester sans matériel) | ✅ | Nicolas |
 | API + base de données | ✅ | Thomas |
 | Tableau de bord (dashboard) | ✅ | Nicolas, Raphael |
-| Chiffrement TLS (MQTTS, HTTPS) | ✅ serveur · ⏳ boîtier | Thomas · Nicolas |
+| Chiffrement TLS (MQTTS, HTTPS) | ✅ serveur · 🟡 boîtier : code prêt, à tester sur la carte | Thomas · Nicolas |
 | Firmware du boîtier (ESP8266) | 🟡 en test sur la plaquette | Nicolas, Baptiste |
 | Scripts IA (webcam + prédiction) | ⏳ | Équipe IA |
 | Wi-Fi de table et laptop serveur final | ⏳ | Équipe INFRA |
@@ -260,7 +260,7 @@ Détails du chiffrement : [docs/tls.md](docs/tls.md).
 | Tâche | Qui |
 |---|---|
 | Tester le firmware sur la plaquette, puis calibrer les seuils (gaz, présence) | Baptiste, Nicolas |
-| Passer le boîtier en MQTTS (certificat + réglage de l'heure) | Nicolas |
+| Tester le boîtier en MQTTS sur la carte (code prêt : [firmware/README.md](firmware/README.md#passer-en-mqtts-chiffré)) | Nicolas, Baptiste |
 | Fournir l'heure au boîtier sans Internet (serveur NTP local) | Thomas / INFRA |
 | Brancher les scripts IA (alertes + vidéo) | Équipe IA |
 | Mettre en place le Wi-Fi de table sur le laptop serveur | Équipe INFRA |
