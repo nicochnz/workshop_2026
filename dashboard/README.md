@@ -34,20 +34,24 @@ npm run build                # génère out/
 
 ## Thème
 
-Palette fournie : `#061128` `#00ffa3` `#00b3ff` `#8b5cf6` `#f1f5ff`, déclarée dans
-`src/app/globals.css` sous forme de **couleurs sémantiques** Tailwind (les couleurs par défaut
-sont désactivées) :
+Palette fournie : `#061128` `#00ffa3` `#00b3ff` `#8b5cf6` `#f1f5ff`, style néon cyberpunk, fond
+éclairci en `#0b1c44`. Déclarée dans `src/app/globals.css` sous forme de **couleurs sémantiques**
+Tailwind (les couleurs par défaut sont désactivées). Contrastes mesurés sur les **cartes** `#132b60`,
+le cas le plus défavorable :
 
-| Classe | Couleur | Contraste sur le fond | Usage |
+| Classe | Couleur | Contraste | Usage |
 |---|---|---|---|
-| `fg` | `#f1f5ff` | 17,2:1 | Texte principal |
-| `muted` | `#94a3c7` | 7,4:1 | Texte secondaire |
-| `ok` | `#00ffa3` | 14,2:1 | En ligne, succès |
-| `info` | `#00b3ff` | 8,0:1 | Données, focus clavier |
-| `accent` | `#8b5cf6` | 4,4:1 | Décor et bordures **uniquement** (trop faible pour du texte) |
-| `accent-soft` | `#a78bfa` | 6,9:1 | Violet pour du texte |
-| `warn` | `#ffb020` | 10,3:1 | Alerte `WARNING` (ajout) |
-| `crit` | `#ff4d6d` | 5,8:1 | Alerte `CRITICAL`, hors ligne (ajout) |
+| `fg` | `#f1f5ff` | 12,5:1 | Texte principal |
+| `muted` | `#a9b8dd` | 6,9:1 | Texte secondaire |
+| `ok` | `#00ffa3` | 10,3:1 | En ligne, succès |
+| `info` | `#00b3ff` | 5,8:1 | Données, courbes |
+| `accent` | `#8b5cf6` | 3,2:1 | Décor, bordures, halos **uniquement** |
+| `accent-soft` | `#b69cff` | 6,0:1 | Violet pour du texte |
+| `warn` | `#ffb020` | 7,5:1 | Alerte `WARNING` (ajout) |
+| `crit` | `#ff6b85` | 5,0:1 | Alerte `CRITICAL`, hors ligne (ajout) |
+
+Effets néon (utilitaires maison) : `neon-panel` (bordure dégradée + halo), `neon-glow` (texte
+lumineux, titres et valeurs clés seulement), `neon-rule` (trait lumineux).
 
 Règles d'accessibilité : contraste ≥ 4,5:1 pour tout texte, focus clavier visible, une
 information n'est jamais portée par la couleur seule (icône + texte), animations coupées si

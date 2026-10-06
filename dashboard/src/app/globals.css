@@ -1,29 +1,30 @@
 @import "tailwindcss";
 
 /*
- * Thème Sentinel-X. Palette fournie : #061128 #00ffa3 #00b3ff #8b5cf6 #f1f5ff.
- * Contrastes vérifiés (WCAG) sur le fond : seuil 4,5:1 pour le texte.
- * Seules ces couleurs existent : les couleurs Tailwind par défaut sont désactivées.
+ * Thème néon Sentinel-X. Palette fournie : #061128 #00ffa3 #00b3ff #8b5cf6 #f1f5ff
+ * (fond éclairci en #0b1c44). Contrastes WCAG vérifiés sur le fond ET sur les cartes :
+ * tout texte ≥ 4,5:1. Les couleurs Tailwind par défaut sont désactivées.
  */
 @theme {
   --color-*: initial;
 
-  --color-night: #061128;         /* fond de page */
-  --color-panel: #0c1a3a;         /* cartes */
-  --color-panel-raised: #12244d;  /* survol, champs */
-  --color-line: #1d3566;          /* bordures discrètes */
+  --color-night: #0b1c44;          /* fond de page */
+  --color-deep: #061128;           /* zones encastrées (vidéo, champs) */
+  --color-panel: #132b60;          /* cartes */
+  --color-panel-raised: #1a3672;   /* survol */
+  --color-line: #2a4a8f;           /* bordures discrètes */
 
-  --color-fg: #f1f5ff;            /* texte principal — 17,2:1 */
-  --color-muted: #94a3c7;         /* texte secondaire — 7,4:1 */
+  --color-fg: #f1f5ff;             /* texte principal — 12,5:1 sur carte */
+  --color-muted: #a9b8dd;          /* texte secondaire — 6,9:1 sur carte */
 
-  --color-ok: #00ffa3;            /* en ligne, succès — 14,2:1 */
-  --color-info: #00b3ff;          /* données, focus — 8,0:1 */
-  --color-accent: #8b5cf6;        /* décor, bordures, gros éléments seulement — 4,4:1 */
-  --color-accent-soft: #a78bfa;   /* violet pour du texte — 6,9:1 */
+  --color-ok: #00ffa3;             /* en ligne, succès — 10,3:1 */
+  --color-info: #00b3ff;           /* données, focus — 5,8:1 */
+  --color-accent: #8b5cf6;         /* décor, bordures, halos uniquement */
+  --color-accent-soft: #b69cff;    /* violet pour du texte — 6,0:1 */
 
   /* Ajouts hors palette, indispensables pour distinguer les alertes */
-  --color-warn: #ffb020;          /* WARNING — 10,3:1 */
-  --color-crit: #ff4d6d;          /* CRITICAL, hors ligne — 5,8:1 */
+  --color-warn: #ffb020;           /* WARNING — 7,5:1 */
+  --color-crit: #ff6b85;           /* CRITICAL, hors ligne — 5,0:1 */
 
   --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
@@ -36,10 +37,14 @@
 
   body {
     background-color: var(--color-night);
-    /* Halo néon discret, purement décoratif */
+    /* Halos néon + grille façon cyberpunk, purement décoratifs */
     background-image:
-      radial-gradient(60rem 30rem at 10% -10%, rgb(0 179 255 / 0.12), transparent 60%),
-      radial-gradient(50rem 30rem at 110% 10%, rgb(139 92 246 / 0.14), transparent 60%);
+      radial-gradient(55rem 28rem at 0% -5%, rgb(0 179 255 / 0.22), transparent 65%),
+      radial-gradient(50rem 30rem at 100% 0%, rgb(139 92 246 / 0.28), transparent 65%),
+      radial-gradient(40rem 25rem at 50% 110%, rgb(0 255 163 / 0.10), transparent 70%),
+      linear-gradient(rgb(0 179 255 / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(0 179 255 / 0.06) 1px, transparent 1px);
+    background-size: auto, auto, auto, 40px 40px, 40px 40px;
     background-attachment: fixed;
     color: var(--color-fg);
     font-family: var(--font-sans);
@@ -47,7 +52,7 @@
 
   /* Focus clavier toujours visible */
   :focus-visible {
-    outline: 2px solid var(--color-info);
+    outline: 2px solid var(--color-ok);
     outline-offset: 2px;
   }
 
@@ -59,4 +64,30 @@
       transition-duration: 0.01ms !important;
     }
   }
+}
+
+/* Carte néon : bordure en dégradé cyan → violet + halo */
+@utility neon-panel {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--color-panel), var(--color-panel)) padding-box,
+    linear-gradient(135deg, rgb(0 179 255 / 0.9), rgb(139 92 246 / 0.9) 60%, rgb(0 255 163 / 0.6)) border-box;
+  box-shadow:
+    0 0 18px -4px rgb(0 179 255 / 0.45),
+    0 0 40px -12px rgb(139 92 246 / 0.6),
+    inset 0 0 24px -12px rgb(0 179 255 / 0.35);
+}
+
+/* Lueur néon sur un texte (titres, valeurs clés) — la couleur vient de `color` */
+@utility neon-glow {
+  text-shadow:
+    0 0 6px currentColor,
+    0 0 18px color-mix(in srgb, currentColor 55%, transparent);
+}
+
+/* Trait lumineux sous le header */
+@utility neon-rule {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-info), var(--color-accent), var(--color-ok), transparent);
+  box-shadow: 0 0 12px rgb(0 179 255 / 0.8);
 }
