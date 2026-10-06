@@ -1,32 +1,44 @@
-# API Sentinel-X — image multi-stage, exécutée sans privilège root.
+# API Sentinel-X + dashboard — image multi-stage, exécutée sans privilège root.
+# Contexte de build : RACINE du dépôt (l'image embarque aussi le dashboard) :
+#   docker build -f api/Dockerfile -t sentinel-api .
 # L'équipe INFRA l'intègre au docker-compose.yml (broker + PostgreSQL + API).
 
+# --- API : compilation TypeScript ---
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY api/package.json api/package-lock.json ./
 RUN npm ci
-COPY tsconfig.json tsconfig.build.json ./
-COPY src ./src
+COPY api/tsconfig.json api/tsconfig.build.json ./
+COPY api/src ./src
 RUN npm run build
 
-# Dépendances de production seules, sans la chaîne de compilation.
+# --- API : dépendances de production seules, sans la chaîne de compilation ---
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY api/package.json api/package-lock.json ./
 RUN npm ci --omit=dev
 
+# --- Dashboard Next.js exporté en statique (out/) ---
+FROM node:20-alpine AS dashboard
+WORKDIR /dashboard
+COPY dashboard/package.json dashboard/package-lock.json ./
+RUN npm ci
+COPY dashboard/ ./
+# Vide = même origine : le dashboard appelle l'API qui le sert (contrat §4)
+ENV NEXT_PUBLIC_API_URL="" NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# --- Image finale ---
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY package.json ./
-COPY db ./db
-
-# Dashboard exporté (étape 3) : décommenter quand `dashboard/out` existe.
-# Le build doit alors se faire depuis la racine du dépôt.
-# COPY dashboard/out ./public
+COPY api/package.json ./
+COPY api/db ./db
+# Servi sur / par l'API (DASHBOARD_DIR=public par défaut)
+COPY --from=dashboard /dashboard/out ./public
 
 # `node` est un utilisateur non-root fourni par l'image officielle.
 USER node

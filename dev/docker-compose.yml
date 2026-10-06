@@ -32,3 +32,31 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+
+  # API + dashboard, comme en production. Lancé seulement avec le profil "full" :
+  #   docker compose -f dev/docker-compose.yml --profile full up -d --build
+  # Sans ce profil, on lance l'API à la main (npm run dev) pour développer.
+  api:
+    profiles: ["full"]
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    image: sentinel-api:dev
+    container_name: sx-api-dev
+    env_file: ../api/.env  # jetons, limites… (les valeurs ci-dessous priment)
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      MQTT_URL: mqtt://mosquitto:1883
+      MQTT_PASSWORD: ${MQTT_API_PASSWORD}
+      DATABASE_URL: postgres://sentinel:${POSTGRES_PASSWORD}@db:5432/sentinel
+      ALLOWED_ORIGINS: http://localhost:8080
+      DASHBOARD_DIR: public
+    ports:
+      - "8080:8080"
+    depends_on:
+      mosquitto:
+        condition: service_started
+      db:
+        condition: service_healthy
+    restart: unless-stopped

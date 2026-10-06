@@ -87,7 +87,28 @@ npm install && npm run dev         # http://localhost:8080
 
 Routes, WebSocket, variables d'environnement et procédure de test : [api/README.md](api/README.md).
 
-_Dashboard et firmware : à compléter (étapes 3 et 4)._
+### Dashboard
+
+```bash
+cd dashboard && cp .env.example .env.local && npm install
+npm run dev                        # http://localhost:3100 (API de dev sur :8080)
+```
+
+Thème, structure et accessibilité : [dashboard/README.md](dashboard/README.md).
+
+### Stack complète, comme en production
+
+Broker + PostgreSQL + API qui sert le dashboard, en conteneurs (`api/.env` requis) :
+
+```bash
+docker compose -f dev/docker-compose.yml --profile full up -d --build
+```
+
+→ http://localhost:8080, connexion avec `OPERATOR_TOKEN` (`api/.env`).
+
+### Firmware
+
+Compilation, flash et tests pas à pas : [firmware/README.md](firmware/README.md).
 
 ## Réseau (option B)
 
@@ -114,6 +135,8 @@ _Détails TLS et hardening : à compléter (étape 5)._
 
 - [Contrat d'interface](docs/contrat.md) — topics MQTT, formats JSON, API REST, WebSocket
 - [API](api/README.md) — routes, WebSocket, variables d'environnement, Docker
+- [Dashboard](dashboard/README.md) — thème, accessibilité, build statique
+- [Firmware](firmware/README.md) — flash, tests, calibration
 - [Câblage](docs/cablage.md) — brochage du boîtier
 - [Composants](docs/composants.md) — matériel disponible
 
