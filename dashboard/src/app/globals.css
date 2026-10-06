@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/*
+ * Thème Sentinel-X. Palette fournie : #061128 #00ffa3 #00b3ff #8b5cf6 #f1f5ff.
+ * Contrastes vérifiés (WCAG) sur le fond : seuil 4,5:1 pour le texte.
+ * Seules ces couleurs existent : les couleurs Tailwind par défaut sont désactivées.
+ */
+@theme {
+  --color-*: initial;
+
+  --color-night: #061128;         /* fond de page */
+  --color-panel: #0c1a3a;         /* cartes */
+  --color-panel-raised: #12244d;  /* survol, champs */
+  --color-line: #1d3566;          /* bordures discrètes */
+
+  --color-fg: #f1f5ff;            /* texte principal — 17,2:1 */
+  --color-muted: #94a3c7;         /* texte secondaire — 7,4:1 */
+
+  --color-ok: #00ffa3;            /* en ligne, succès — 14,2:1 */
+  --color-info: #00b3ff;          /* données, focus — 8,0:1 */
+  --color-accent: #8b5cf6;        /* décor, bordures, gros éléments seulement — 4,4:1 */
+  --color-accent-soft: #a78bfa;   /* violet pour du texte — 6,9:1 */
+
+  /* Ajouts hors palette, indispensables pour distinguer les alertes */
+  --color-warn: #ffb020;          /* WARNING — 10,3:1 */
+  --color-crit: #ff4d6d;          /* CRITICAL, hors ligne — 5,8:1 */
+
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-night);
+    /* Halo néon discret, purement décoratif */
+    background-image:
+      radial-gradient(60rem 30rem at 10% -10%, rgb(0 179 255 / 0.12), transparent 60%),
+      radial-gradient(50rem 30rem at 110% 10%, rgb(139 92 246 / 0.14), transparent 60%);
+    background-attachment: fixed;
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+
+  /* Focus clavier toujours visible */
+  :focus-visible {
+    outline: 2px solid var(--color-info);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
