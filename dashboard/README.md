@@ -26,6 +26,20 @@ npm run lint
 npm run build                # génère out/
 ```
 
+## Structure
+
+```
+src/
+  app/            page unique (jeton → dashboard), thème global (globals.css)
+  components/     Panel, TokenGate, ConnectionBadge, StatusCard, LiveCharts + MetricChart,
+                  AlertList, ControlPanel, VideoFeed
+  hooks/          useLiveSocket (WebSocket + reconnexion), useDashboardData, useNow
+  lib/            types du contrat, client REST, jeton, état, seuils, libellés, formats
+```
+
+Courbes : Chart.js utilisé directement (sans surcouche React), modules enregistrés à la carte.
+Les seuils affichés (`lib/thresholds.ts`) doivent suivre la calibration du firmware.
+
 ## Production
 
 1. `NEXT_PUBLIC_API_URL` **vide** au moment du build (même origine).

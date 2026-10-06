@@ -1,23 +1,20 @@
 "use client";
 
 import { useDashboardData } from "@/hooks/useDashboardData";
+import { useNow } from "@/hooks/useNow";
 import { clearToken } from "@/lib/token";
+import { AlertList } from "./AlertList";
 import { ConnectionBadge } from "./ConnectionBadge";
+import { ControlPanel } from "./ControlPanel";
+import { LiveCharts } from "./LiveCharts";
 import { Panel } from "./Panel";
-
-// Aperçu brut des données (étape 2). Remplacé par les vrais composants à l'étape 3.
-function Debug({ label, value }: { label: string; value: unknown }) {
-  return (
-    <div className="flex min-h-32 flex-1 flex-col gap-2 rounded-lg border border-dashed border-line bg-deep/60 p-3">
-      <span className="font-mono text-xs text-muted">{label}</span>
-      <pre className="overflow-auto font-mono text-xs text-fg">{JSON.stringify(value, null, 2)}</pre>
-    </div>
-  );
-}
+import { StatusCard } from "./StatusCard";
+import { VideoFeed } from "./VideoFeed";
 
 export function Dashboard({ token }: { token: string }) {
   const data = useDashboardData(token);
-  const last = data.telemetry.at(-1);
+  const now = useNow();
+  const lastMeasureAt = data.telemetry.at(-1)?.received_at ?? null;
 
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4 lg:p-6">
@@ -52,19 +49,23 @@ export function Dashboard({ token }: { token: string }) {
 
       <main className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <Panel title="État du boîtier" className="lg:col-span-3">
-          <Debug label="status" value={data.status} />
+          <StatusCard status={data.status} lastMeasureAt={lastMeasureAt} now={now} />
         </Panel>
         <Panel title="Mesures en direct" className="lg:col-span-9">
-          <Debug label={`telemetry — ${data.telemetry.length} points, dernière mesure :`} value={last ?? null} />
+          <LiveCharts telemetry={data.telemetry} />
         </Panel>
         <Panel title="Vision IA" className="lg:col-span-5">
-          <Debug label="video" value="Étape 3" />
+          <VideoFeed />
         </Panel>
-        <Panel title="Alertes" className="lg:col-span-4">
-          <Debug label={`alerts — ${data.alerts.length}, la plus récente :`} value={data.alerts[0] ?? null} />
+        <Panel
+          title="Alertes"
+          className="lg:col-span-4"
+          aside={<span className="font-mono text-xs text-muted">{data.alerts.length}</span>}
+        >
+          <AlertList alerts={data.alerts} now={now} />
         </Panel>
         <Panel title="Commandes" className="lg:col-span-3">
-          <Debug label="acks reçus" value={Object.keys(data.acks).length} />
+          <ControlPanel token={token} acks={data.acks} now={now} />
         </Panel>
       </main>
     </div>

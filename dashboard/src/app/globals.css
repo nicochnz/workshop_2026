@@ -50,6 +50,23 @@
     font-family: var(--font-sans);
   }
 
+  /* Tout ce qui est cliquable affiche la main (Tailwind 4 l'a retiré des boutons) */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  summary,
+  select:not(:disabled),
+  label[for],
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   /* Focus clavier toujours visible */
   :focus-visible {
     outline: 2px solid var(--color-ok);
