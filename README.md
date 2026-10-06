@@ -22,7 +22,7 @@ d'accès Wi-Fi.
 | Firmware ESP8266 | 🟡 | Compile ; test sur carte et câblage des capteurs à faire |
 | Scripts IA (vision + prédictif) | ⏳ | Équipe IA : `POST /api/v1/alerts` + flux MJPEG `:5000/video_feed` |
 | Docker Compose final + Wi-Fi de table | ⏳ | Équipe INFRA |
-| TLS (MQTTS 8883, HTTPS) | ⏳ | Équipe CYBER, une fois tout validé en clair |
+| TLS (MQTTS 8883, HTTPS 443) | 🟡 | CA locale ECDSA, broker + API + simulateur en MQTTS, HTTPS/WSS via nginx ; ESP à passer en TLS — [docs/tls.md](docs/tls.md) |
 
 ---
 
@@ -35,7 +35,8 @@ d'accès Wi-Fi.
                         │ Wi-Fi 192.168.10.0/24 — MQTT(S)
  ┌────────────── Laptop serveur (PC Serveur Local) 192.168.10.1 ───┐
  │  Docker Compose                                                 │
- │   ├─ Mosquitto (broker MQTT)        :1883 / :8883               │
+ │   ├─ Mosquitto (broker MQTT)        :8883 TLS (+ :1883 secours) │
+ │   ├─ nginx (HTTPS, WSS, vidéo IA)   :443                        │
  │   ├─ API Node.js + dashboard        :8080  ──► PostgreSQL       │
  │   └─ PostgreSQL                     (réseau interne uniquement) │
  │  Script IA Python (webcam USB + YOLO, Isolation Forest) :5000   │
@@ -75,7 +76,8 @@ de toute l'équipe.
 /dashboard   dashboard Next.js, exporté en statique et servi par l'API
 /firmware    projet PlatformIO ESP8266
 /simulator   faux ESP8266 pour développer sans matériel
-/dev         broker Mosquitto + PostgreSQL de développement (docker compose)
+/dev         stack Docker : Mosquitto, PostgreSQL, API, reverse proxy HTTPS (docker compose)
+/scripts     generate-certs.sh : CA locale et certificats TLS (sortie dans certs/, ignoré par Git)
 /docs        contrat d'interface, câblage, composants
 ```
 
@@ -105,11 +107,20 @@ Dans `api/.env`, remplacer `INGEST_TOKEN` et `OPERATOR_TOKEN` par des valeurs al
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-**2. Lancer broker + base + API/dashboard** (comme en production) :
+Générer la CA locale et les certificats TLS (Git Bash sous Windows, une seule fois) :
+
+```bash
+./scripts/generate-certs.sh
+```
+
+**2. Lancer broker + base + API/dashboard** (comme en production, API ↔ broker en MQTTS) :
 
 ```bash
 docker compose -f dev/docker-compose.yml --profile full up -d --build
 ```
+
+Avec HTTPS (reverse proxy nginx sur 443) : ajouter `--profile https` et ouvrir
+`https://localhost` après avoir importé `certs/public/ca.crt` (voir [docs/tls.md](docs/tls.md) §5).
 
 Le premier build prend quelques minutes (il construit l'API et le dashboard).
 
@@ -149,7 +160,7 @@ Seuls le broker et la base restent en conteneurs.
 
 ```bash
 docker compose -f dev/docker-compose.yml --profile full stop api   # si la stack complète tourne
-docker compose -f dev/docker-compose.yml up -d                      # Mosquitto (1883) + PostgreSQL (55432)
+docker compose -f dev/docker-compose.yml up -d                      # Mosquitto (8883 TLS + 1883) + PostgreSQL (55432)
 ```
 
 | Brique | Commandes | Adresse | Doc |
@@ -171,7 +182,9 @@ docker exec -it sx-mosquitto-dev mosquitto_sub -u monitor -P change-me-monitor -
 
 | Port | Service |
 |---|---|
-| 1883 | Mosquitto (clair, dev uniquement) |
+| 8883 | Mosquitto MQTTS |
+| 1883 | Mosquitto en clair (fallback temporaire) |
+| 443 / 80 | Dashboard en HTTPS via nginx (80 redirige vers 443), profil `https` |
 | 55432 | PostgreSQL de dev (évite le conflit avec un PostgreSQL local) |
 | 8080 | API + dashboard |
 | 3100 | Dashboard en mode dev (`next dev`) |
@@ -204,7 +217,10 @@ docker exec -it sx-mosquitto-dev mosquitto_sub -u monitor -P change-me-monitor -
 | « Jeton refusé par l'API » | Copier l'`OPERATOR_TOKEN` exact de `api/.env` ; après un changement, relancer l'API |
 | Erreur CORS en dev sur :3100 | L'API doit tourner avec `NODE_ENV=development` et `ALLOWED_ORIGINS` contenant `http://localhost:3100` |
 | « Flux vidéo indisponible » | Normal tant que le script IA ne diffuse pas sur le port 5000 |
-| L'ESP ne joint pas le broker | Pare-feu Windows : ouvrir le port 1883 entrant (voir [firmware/README.md](firmware/README.md)) |
+| L'ESP ne joint pas le broker | Pare-feu Windows : ouvrir le port 1883 (ou 8883) entrant (voir [firmware/README.md](firmware/README.md)) |
+| API : « CA MQTT illisible » ou « MQTT_CA_FILE est vide » | Lancer `./scripts/generate-certs.sh`, ou passer en fallback `API_MQTT_URL=mqtt://mosquitto:1883` ([docs/tls.md](docs/tls.md) §6) |
+| Alerte de certificat dans le navigateur | Importer `certs/public/ca.crt` comme autorité racine ([docs/tls.md](docs/tls.md) §5) |
+| Problème TLS juste avant la démo | Fallback en clair, une variable à changer : [docs/tls.md](docs/tls.md) §6 |
 
 ---
 
@@ -216,8 +232,9 @@ docker exec -it sx-mosquitto-dev mosquitto_sub -u monitor -P change-me-monitor -
 | ESP8266        | `192.168.10.20`       |
 | Postes équipe  | `192.168.10.50 → .60` |
 
-Ports exposés : 8883 (MQTTS), 8080 (API + dashboard), 5000 (flux vidéo IA), 22 (SSH par clé).
-Le port 1883 (MQTT en clair) sert uniquement en développement.
+Ports exposés : 8883 (MQTTS), 443 (dashboard HTTPS), 8080 (API + dashboard en HTTP, fallback),
+5000 (flux vidéo IA), 22 (SSH par clé). Le port 1883 (MQTT en clair) reste ouvert en fallback
+temporaire, puis est fermé en phase 3 ([docs/tls.md](docs/tls.md) §7).
 
 ## Sécurité
 
@@ -228,13 +245,15 @@ Le port 1883 (MQTT en clair) sert uniquement en développement.
 - Dashboard : aucun jeton dans le code, jeton en `sessionStorage`, servi à la même origine que l'API
   (pas de CORS en production).
 - Image Docker : multi-stage, utilisateur non-root, healthcheck.
-- MQTT : connexion anonyme interdite, un compte et des ACL par client, TLS (MQTTS) en cible finale.
-
-_Détails TLS et hardening : à compléter avec l'équipe CYBER._
+- MQTT : connexion anonyme interdite, un compte et des ACL par client, MQTTS (TLS 1.2+) avec
+  vérification du certificat par la CA locale.
+- TLS : CA locale ECDSA P-256, clés privées jamais commitées ni montées dans l'API, HTTPS/WSS
+  et flux vidéo servis à la même origine par nginx. Détails : [docs/tls.md](docs/tls.md).
 
 ## Documentation
 
 - [Contrat d'interface](docs/contrat.md) — topics MQTT, formats JSON, API REST, WebSocket
+- [TLS](docs/tls.md) — certificats, MQTTS, HTTPS, ESP8266 et heure, fallback démo
 - [API](api/README.md) — routes, WebSocket, variables d'environnement, Docker
 - [Dashboard](dashboard/README.md) — thème, accessibilité, structure, build statique
 - [Simulateur](simulator/README.md) — scénarios, commandes de test
