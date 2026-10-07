@@ -129,3 +129,22 @@ L'écran OLED affiche `MQTTS:OK` : c'est la preuve visible du chiffrement pour l
 
 Plan B pour la démo : `USE_TLS 0` et `MQTT_PORT 1883`, puis reflasher. Le broker accepte toujours le
 clair tant que `MQTT_PLAIN_LISTENER=on`.
+
+## Diagnostic du capteur ultrason
+
+Programme séparé qui teste uniquement le HC-SR04 (`diag/ultrasonic_diag.cpp`), pour savoir si un
+problème vient du câblage, de l'alimentation ou du capteur :
+
+```bash
+pio run -e diag-ultrason -t upload
+pio device monitor
+```
+
+| Ce que le moniteur affiche | Signification |
+|---|---|
+| Lectures HIGH dont la durée varie quand on bouge la main | Capteur et câblage OK |
+| `Test flottant : ... 10us=0 1ms=0 50ms=0` et ECHO qui change d'état d'un test à l'autre | **D6 n'est reliée à rien** : vérifier la broche D6 et la rangée du pont diviseur |
+| ECHO LOW stable, « aucun signal » | Capteur muet : alimentation 5 V (VU), TRIG sur D3, GND commun, ou capteur défectueux |
+| ECHO HIGH permanent qui remonte aussitôt après le test flottant | ECHO reliée au 5 V sans la résistance de 1 kΩ : **débrancher**, risque pour l'ESP |
+
+Reflasher ensuite le firmware normal : `pio run -e nodemcuv2 -t upload`.
