@@ -276,6 +276,6 @@ Détails du chiffrement : [docs/tls.md](docs/tls.md).
 | Membre | Rôle |
 |---|---|
 | Nicolas | Contrat d'interface, simulateur, firmware, dashboard |
-| Raphael | Intégration, dashboard |
+| Rafael | Intégration, IA |
 | Thomas | API, tests, chiffrement TLS |
 | Baptiste | Câblage du boîtier, tests du firmware |
