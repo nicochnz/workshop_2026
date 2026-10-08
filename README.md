@@ -20,7 +20,8 @@ aussi de point d'accès Wi-Fi.
 | Tableau de bord (dashboard) | ✅ | Nicolas, Raphael |
 | Chiffrement TLS (MQTTS, HTTPS) | ✅ serveur · 🟡 boîtier : code prêt, à tester sur la carte | Thomas · Nicolas |
 | Firmware du boîtier (ESP8266) | 🟡 en test sur la plaquette | Nicolas, Baptiste |
-| Scripts IA (webcam + prédiction) | ⏳ | Équipe IA |
+| Script IA — Vision intelligente (webcam, détection d'intrus) | ✅ | Équipe IA |
+| Script IA — Maintenance prédictive (anomalies sur séries temporelles) | ✅ | Équipe IA |
 | Wi-Fi de table et laptop serveur final | ⏳ | Équipe INFRA |
 
 Ce qu'il reste à faire est détaillé dans [Reste à faire](#reste-à-faire).
@@ -76,6 +77,7 @@ api/         l'API (et son image Docker, qui contient aussi le dashboard)
 dashboard/   le tableau de bord web
 firmware/    le programme du boîtier ESP8266
 simulator/   le faux boîtier, pour tester sans matériel
+ai/          script Python de vision par ordinateur (détection d'intrus sur la webcam)
 dev/         la configuration Docker (broker, base, API, HTTPS)
 scripts/     generate-certs.sh : crée les certificats de chiffrement
 docs/        contrat d'interface, TLS, câblage, liste du matériel
@@ -189,9 +191,11 @@ docker compose -f dev/docker-compose.yml up -d                      # broker + b
 | Dashboard | `cd dashboard && cp .env.example .env.local && npm install && npm run dev` | http://localhost:3100 | [dashboard/README.md](dashboard/README.md) |
 | Simulateur | `cd simulator && npm start` | — | [simulator/README.md](simulator/README.md) |
 | Firmware | PlatformIO dans VS Code | — | [firmware/README.md](firmware/README.md) |
+| Script IA (vision) | `cd ai && python -m vision.main` | http://localhost:5000/video_feed | [ai/README.md](ai/README.md) |
+| Script IA (prédictif) | `cd ai && python -m predictive.main` | — (publie sur l'API) | [ai/README.md](ai/README.md) |
 
 Vérifier son code avant un commit : `npm run typecheck` partout, `npm run lint` (dashboard),
-`npm test` (API).
+`npm test` (API), `python -m unittest discover -s tests` (IA, depuis `ai/`).
 
 Voir passer tous les messages MQTT :
 
@@ -255,21 +259,6 @@ Détails du chiffrement : [docs/tls.md](docs/tls.md).
 
 ---
 
-## Reste à faire
-
-| Tâche | Qui |
-|---|---|
-| Tester le firmware sur la plaquette, puis calibrer les seuils (gaz, présence) | Baptiste, Nicolas |
-| Tester le boîtier en MQTTS sur la carte (code prêt : [firmware/README.md](firmware/README.md#passer-en-mqtts-chiffré)) | Nicolas, Baptiste |
-| Fournir l'heure au boîtier sans Internet (serveur NTP local) | Thomas / INFRA |
-| Brancher les scripts IA (alertes + vidéo) | Équipe IA |
-| Mettre en place le Wi-Fi de table sur le laptop serveur | Équipe INFRA |
-| Fermer les ports de secours (1883, 8080, 5000) une fois tout validé en TLS | Thomas |
-| Auto-test de sécurité avant le pentest de jeudi | Toute l'équipe |
-| Scénario de démo minuté et plan B | Toute l'équipe |
-
----
-
 ## Documentation détaillée
 
 - [Contrat d'interface](docs/contrat.md) — messages MQTT, API, temps réel
@@ -278,6 +267,7 @@ Détails du chiffrement : [docs/tls.md](docs/tls.md).
 - [Dashboard](dashboard/README.md) — thème, accessibilité, structure
 - [Simulateur](simulator/README.md) — scénarios, tests
 - [Firmware](firmware/README.md) — installation, flash, tests sur carte
+- [IA — Vision & Maintenance prédictive](ai/README.md) — détection d'intrus, flux MJPEG, détection d'anomalies, configuration
 - [Câblage](docs/cablage.md) — branchement des composants
 - [Composants](docs/composants.md) — matériel disponible
 
@@ -286,6 +276,6 @@ Détails du chiffrement : [docs/tls.md](docs/tls.md).
 | Membre | Rôle |
 |---|---|
 | Nicolas | Contrat d'interface, simulateur, firmware, dashboard |
-| Raphael | Intégration, dashboard |
+| Rafael | Intégration, IA |
 | Thomas | API, tests, chiffrement TLS |
 | Baptiste | Câblage du boîtier, tests du firmware |
