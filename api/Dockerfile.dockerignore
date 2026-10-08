@@ -1,0 +1,25 @@
+# Contexte = racine du dépôt (build : docker build -f api/Dockerfile .)
+# Fichier propre à api/Dockerfile (BuildKit) : prioritaire sur un éventuel .dockerignore racine.
+**/node_modules
+**/.next
+**/out
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+**/*.tsbuildinfo
+**/npm-debug.log*
+**/CLAUDE.md
+**/.claude
+# Certificats et clés TLS : jamais dans le contexte de build (docs/tls.md)
+certs
+**/*.key
+**/*.pem
+**/*.crt
+scripts
+.git
+api/test
+firmware
+simulator
+dev
+docs

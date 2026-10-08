@@ -1,0 +1,4 @@
+# Scripts et configs lus dans des conteneurs Linux : toujours en LF
+*.sh text eol=lf
+dev/mosquitto/** text eol=lf
+dev/proxy/** text eol=lf
