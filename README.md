@@ -259,21 +259,6 @@ Détails du chiffrement : [docs/tls.md](docs/tls.md).
 
 ---
 
-## Reste à faire
-
-| Tâche | Qui |
-|---|---|
-| Tester le firmware sur la plaquette, puis calibrer les seuils (gaz, présence) | Baptiste, Nicolas |
-| Tester le boîtier en MQTTS sur la carte (code prêt : [firmware/README.md](firmware/README.md#passer-en-mqtts-chiffré)) | Nicolas, Baptiste |
-| Fournir l'heure au boîtier sans Internet (serveur NTP local) | Thomas / INFRA |
-| Calibrer les hyperparamètres IA (seuils de détection, fenêtres du modèle prédictif) sur le vrai boîtier | Équipe IA |
-| Mettre en place le Wi-Fi de table sur le laptop serveur | Équipe INFRA |
-| Fermer les ports de secours (1883, 8080, 5000) une fois tout validé en TLS | Thomas |
-| Auto-test de sécurité avant le pentest de jeudi | Toute l'équipe |
-| Scénario de démo minuté et plan B | Toute l'équipe |
-
----
-
 ## Documentation détaillée
 
 - [Contrat d'interface](docs/contrat.md) — messages MQTT, API, temps réel
